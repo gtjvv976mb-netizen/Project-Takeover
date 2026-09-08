@@ -39,29 +39,29 @@ export default function BuilderPage({ params }: { params: Promise<{ wallet: stri
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
 
-  if (!data) return <p className="page text-mute">Loading builder…</p>;
+  if (!data) return <p className="wrap py-10 text-muted">Loading builder…</p>;
   const p = data.profile;
   const links = [p?.github && { label: "GitHub", href: p.github }, p?.x && { label: "X", href: p.x }, p?.website && { label: "Website", href: p.website }].filter(Boolean) as { label: string; href: string }[];
   const active = data.listings.filter((l) => l.status === "active");
   const past = data.listings.filter((l) => l.status !== "active");
 
   return (
-    <div className="page space-y-10">
+    <div className="wrap py-10 space-y-10">
       <header className="flex flex-wrap items-start gap-5">
-        <div className="flex h-20 w-20 items-center justify-center border border-rule-soft bg-paper-2"><span className="h-6 w-6 rotate-45 bg-flare" /></div>
+        <div className="flex h-20 w-20 items-center justify-center border border-line bg-bg-2"><span className="h-6 w-6 rotate-45 bg-brand" /></div>
         <div className="min-w-0 flex-1">
           <h1 className="text-2xl font-bold">{p?.name || "Unnamed builder"}</h1>
           <a className="font-mono text-xs text-faint hover:text-ink" href={explorerUrl(cfg, "address", wallet)} target="_blank" rel="noreferrer">{shortKey(wallet, 8)}</a>
           {p?.bio && <p className="mt-2 max-w-2xl whitespace-pre-wrap text-ink">{p.bio}</p>}
           {links.length > 0 && (
-            <div className="mt-3 flex gap-2">{links.map((l) => <a key={l.label} href={l.href} target="_blank" rel="noreferrer" className=" border border-rule-soft px-3 py-1 text-xs hover:border-lime/60">{l.label} ↗</a>)}</div>
+            <div className="mt-3 flex gap-2">{links.map((l) => <a key={l.label} href={l.href} target="_blank" rel="noreferrer" className=" border border-line px-3 py-1 text-xs hover:border-lime/60">{l.label} ↗</a>)}</div>
           )}
         </div>
         {me === wallet && <Button variant="secondary" onClick={() => setEditing((v) => !v)}>{editing ? "Close" : p ? "Edit profile" : "Set up your builder profile"}</Button>}
       </header>
 
       {editing && (
-        <section className="grid gap-3 border border-rule-soft bg-paper-2 p-5 sm:grid-cols-2">
+        <section className="grid gap-3 border border-line bg-bg-2 p-5 sm:grid-cols-2">
           <Field label="Name"><input className={inputCls} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} maxLength={40} /></Field>
           <Field label="Website"><input className={inputCls} value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} placeholder="https://" /></Field>
           <Field label="GitHub"><input className={inputCls} value={form.github} onChange={(e) => setForm({ ...form, github: e.target.value })} placeholder="https://github.com/you" /></Field>

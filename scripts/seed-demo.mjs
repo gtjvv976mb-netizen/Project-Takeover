@@ -8,6 +8,7 @@ if (process.argv.includes("--clear")) {
   console.log("demo listings removed");
   process.exit(0);
 }
+db.prepare("DELETE FROM events WHERE listing_id LIKE 'demo%'").run();
 const ROWS = [
   ["Sunset Terminal", "SUNT", "token_authority", 0.4], ["Ledger Nine", "LDG9", "token_authority", 1.2],
   ["Cold Open", "COLD", "token_authority", 3.5], ["Marginal", "MRGN", "token_authority", 12],

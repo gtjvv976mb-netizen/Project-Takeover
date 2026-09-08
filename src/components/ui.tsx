@@ -1,177 +1,212 @@
 "use client";
 import Link from "next/link";
-import { formatSol, shortKey, STATUS_LABELS, TYPE_LABELS, type Listing, type ListingStatus } from "@/lib/types";
+import { formatSol, shortKey, STATUS_LABELS, TYPE_LABELS, type Listing, type ListingStatus, type ListingType } from "@/lib/types";
+import { CoverArt } from "./CoverArt";
 
-/* ------------------------------------------------------------------ badges */
+/* ------------------------------------------------------------- categories */
 
-const STATUS_STYLE: Record<ListingStatus, string> = {
-  draft: "border-rule-soft text-mute",
-  active: "border-rule text-ink",
-  paid: "border-flare-ink text-flare-ink",
-  sold: "border-ultra text-ultra",
-  cancelled: "border-rule-soft text-faint",
-  disputed: "border-danger text-danger",
-  refunded: "border-rule-soft text-mute",
+export const TYPE_TINT: Record<ListingType, string> = {
+  token_authority: "var(--color-violet)",
+  pump_creator: "var(--color-tangerine)",
+  offchain: "var(--color-teal)",
 };
 
+/** Short, human labels. The long ones are for the detail page. */
+export const TYPE_SHORT: Record<ListingType, string> = {
+  token_authority: "Token controls",
+  pump_creator: "pump.fun coin",
+  offchain: "Project / site",
+};
+
+const STATUS_TINT: Record<ListingStatus, string> = {
+  draft: "var(--color-faint)",
+  active: "var(--color-green)",
+  paid: "var(--color-amber)",
+  sold: "var(--color-blue)",
+  cancelled: "var(--color-faint)",
+  disputed: "var(--color-rose)",
+  refunded: "var(--color-faint)",
+};
+
+export function Pill({ children, tint, dot = false }: { children: React.ReactNode; tint?: string; dot?: boolean }) {
+  return (
+    <span className="pill" style={{ ["--tint" as string]: tint }}>
+      {dot && <span className="pill-dot" />}
+      {children}
+    </span>
+  );
+}
+
 export function StatusBadge({ status }: { status: ListingStatus }) {
-  return (
-    <span className={`t-chip inline-block border px-1.5 py-0.5 font-mono text-[10px] uppercase leading-none tracking-[0.14em] ${STATUS_STYLE[status]}`}>
-      {STATUS_LABELS[status]}
-    </span>
-  );
+  return <Pill tint={STATUS_TINT[status]} dot>{STATUS_LABELS[status]}</Pill>;
 }
 
-export function TypeBadge({ type }: { type: Listing["type"] }) {
-  return (
-    <span className="t-chip inline-block border border-rule-soft px-1.5 py-0.5 font-mono text-[10px] uppercase leading-none tracking-[0.14em] text-mute">
-      {TYPE_LABELS[type]}
-    </span>
-  );
+export function TypeBadge({ type, short = false }: { type: Listing["type"]; short?: boolean }) {
+  return <Pill tint={TYPE_TINT[type]}>{short ? TYPE_SHORT[type] : TYPE_LABELS[type]}</Pill>;
 }
 
-/** Small square proof chip: the things a buyer actually checks. */
-export function Chip({ children, tone = "plain" }: { children: React.ReactNode; tone?: "plain" | "verified" | "warn" }) {
-  const t = tone === "verified" ? "border-ultra text-ultra" : tone === "warn" ? "border-flare-ink text-flare-ink" : "border-rule-soft text-mute";
-  return <span className={`t-chip inline-block border px-1.5 py-0.5 font-mono text-[10px] uppercase leading-none tracking-[0.14em] ${t}`}>{children}</span>;
+export function Chip({ children, tint }: { children: React.ReactNode; tint?: string }) {
+  return <Pill tint={tint ?? "var(--color-muted)"}>{children}</Pill>;
 }
 
-/* ------------------------------------------------------- deterministic mark */
+/* ------------------------------------------------------------------ sigil */
 
-/** A builder's sigil: four squares derived from the wallet, so it is recognisable and never random. */
-export function Sigil({ wallet, size = 28 }: { wallet: string; size?: number }) {
+export function Sigil({ wallet, size = 32 }: { wallet: string; size?: number }) {
   let h = 0;
   for (let i = 0; i < wallet.length; i++) h = (h * 31 + wallet.charCodeAt(i)) >>> 0;
-  const cells = [0, 1, 2, 3].map((i) => (h >> (i * 3)) & 7);
-  const colors = ["var(--color-ink)", "var(--color-flare)", "var(--color-ultra)", "var(--color-hi)"];
+  const hue = h % 360;
   return (
-    <span className="inline-grid shrink-0 grid-cols-2 border border-rule" style={{ width: size, height: size }} aria-hidden>
-      {cells.map((c, i) => <span key={i} style={{ background: colors[c % colors.length] }} />)}
-    </span>
+    <span
+      className="inline-block shrink-0 rounded-full border border-line"
+      style={{
+        width: size,
+        height: size,
+        background: `conic-gradient(from ${h % 360}deg, hsl(${hue} 85% 68%), hsl(${(hue + 90) % 360} 85% 72%), hsl(${(hue + 200) % 360} 80% 70%), hsl(${hue} 85% 68%))`,
+      }}
+      aria-hidden
+    />
   );
 }
 
-/** Token art, framed like a printed plate: a hard 1px box, no radius, no glow. */
-export function TokenAvatar({ image, symbol, size = 48 }: { image?: string | null; symbol?: string | null; size?: number }) {
+export function TokenAvatar({ image, symbol, size = 44 }: { image?: string | null; symbol?: string | null; size?: number }) {
   return image ? (
     // eslint-disable-next-line @next/next/no-img-element
     <img src={image} alt={symbol ?? ""} width={size} height={size}
-      className="border border-rule object-cover" style={{ width: size, height: size }} />
+      className="rounded-xl border border-line object-cover" style={{ width: size, height: size }} />
   ) : (
-    <span className="flex items-center justify-center border border-rule bg-paper-2 font-display text-[13px] uppercase"
+    <span className="grid shrink-0 place-items-center rounded-xl border border-line bg-bg-2 text-[12px] font-bold uppercase text-muted"
       style={{ width: size, height: size }} aria-hidden>
       {(symbol ?? "?").slice(0, 3)}
     </span>
   );
 }
 
-/* ----------------------------------------------------------- listing entry */
+/* ------------------------------------------------------------ listing card */
 
 /**
- * The index row. This is the site's signature: at rest an editorial entry on a
- * hairline; on hover or keyboard focus a black bar wipes across and takes it over.
+ * The card that carries the market. Artwork on top, then the name, a short
+ * description, the proof chips a buyer actually checks, and the price.
  */
-export function ListingRow({ l, rank }: { l: Listing; rank?: number }) {
+export function ListingCard({ l }: { l: Listing }) {
   const t = l.token;
+  const tint = TYPE_TINT[l.type];
   const revoked = t ? !t.mintAuthority && !t.freezeAuthority : false;
   return (
     <Link
       href={`/listings/${l.id}`}
-      className="takeover group grid grid-cols-[auto_1fr_auto] items-center gap-x-4 gap-y-1 border-b border-rule px-3 py-4 sm:grid-cols-[3.5rem_1fr_auto] sm:gap-x-6 sm:px-4"
+      className="card card-hover group flex flex-col overflow-hidden"
+      style={{ ["--accent" as string]: tint }}
     >
-      <span className="t-rank hidden font-display text-[40px] leading-none text-rule-soft sm:block">
-        {String(rank ?? 0).padStart(2, "0")}
-      </span>
-      <span className="min-w-0">
-        <span className="t-title block truncate font-display text-[22px] uppercase leading-[1.05] tracking-tight sm:text-[30px]">
-          {l.title}
-        </span>
-        <span className="mt-1.5 flex flex-wrap items-center gap-1.5">
-          <TypeBadge type={l.type} />
+      <CoverArt seed={l.id} image={t?.image} symbol={t?.symbol} className="aspect-[16/10] w-full" />
+
+      <div className="flex flex-1 flex-col gap-3 p-4">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <TypeBadge type={l.type} short />
           <StatusBadge status={l.status} />
-          {t?.symbol && <Chip>${t.symbol}</Chip>}
-          {revoked && <Chip tone="verified">auth revoked</Chip>}
-          {t?.pump?.complete && <Chip tone="verified">graduated</Chip>}
-          {t?.holders && t.holders.top10Share > 0.5 && <Chip tone="warn">top 10 {(t.holders.top10Share * 100).toFixed(0)}%</Chip>}
-        </span>
-      </span>
-      <span className="flex items-baseline gap-3 justify-self-end">
-        <span className="t-price price whitespace-nowrap">
-          {formatSol(l.priceLamports)}
-          <span className="ml-1 font-mono text-[11px] tracking-widest">SOL</span>
-        </span>
-        <span className="t-arrow font-display text-[26px] text-paper">→</span>
-      </span>
+        </div>
+
+        <div>
+          <h3 className="text-[19px] font-bold leading-snug text-ink transition-colors group-hover:text-brand">
+            {l.title}
+          </h3>
+          <p className="clamp-2 mt-1 text-[14px] leading-relaxed text-muted">
+            {l.description || "No description yet."}
+          </p>
+        </div>
+
+        {(t?.symbol || revoked || t?.pump?.complete || t?.holders) && (
+          <div className="flex flex-wrap gap-1.5">
+            {t?.symbol && <Chip>${t.symbol}</Chip>}
+            {revoked && <Chip tint="var(--color-blue)">Authorities revoked</Chip>}
+            {t?.pump?.complete && <Chip tint="var(--color-blue)">Graduated</Chip>}
+            {t?.holders && (
+              <Chip tint={t.holders.top10Share > 0.5 ? "var(--color-rose)" : "var(--color-green)"}>
+                Top 10 hold {(t.holders.top10Share * 100).toFixed(0)}%
+              </Chip>
+            )}
+          </div>
+        )}
+
+        <div className="mt-auto flex items-end justify-between border-t border-line pt-3">
+          <div>
+            <div className="kicker mb-1">Price</div>
+            <div className="price">
+              {formatSol(l.priceLamports)} <span className="text-[13px] font-semibold text-muted">SOL</span>
+            </div>
+          </div>
+          <span
+            className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-[13px] font-semibold transition-all group-hover:gap-2.5"
+            style={{ background: `color-mix(in srgb, ${tint} 12%, white)`, color: `color-mix(in srgb, ${tint} 80%, #1B1830)` }}
+          >
+            View <span aria-hidden>→</span>
+          </span>
+        </div>
+      </div>
     </Link>
   );
 }
 
-/** Kept for pages that still lay out in a grid. */
-export function ListingCard({ l }: { l: Listing }) {
-  return <ListingRow l={l} />;
+/** Compact horizontal variant for dashboards and builder pages. */
+export function ListingRow({ l }: { l: Listing; rank?: number }) {
+  return <ListingCard l={l} />;
 }
 
-/* ----------------------------------------------------------------- buttons */
+/* ---------------------------------------------------------------- controls */
 
 export function Button({
   children,
   variant = "primary",
   className = "",
   ...rest
-}: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "secondary" | "danger" }) {
-  const base =
-    "takeover inline-flex items-center justify-center gap-2 border px-5 py-3 font-mono text-[11px] uppercase tracking-[0.16em] transition-colors disabled:cursor-not-allowed disabled:opacity-40";
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "secondary" | "danger" | "ghost" }) {
   const v = {
-    primary: "takeover-flare border-ink bg-ink text-paper hover:text-paper",
-    secondary: "border-rule bg-transparent text-ink hover:text-paper",
-    danger: "border-danger bg-transparent text-danger hover:text-paper",
+    primary: "btn-primary",
+    secondary: "btn-secondary",
+    danger: "btn-danger",
+    ghost: "btn-ghost",
   }[variant];
-  return <button className={`${base} ${v} ${className}`} {...rest}>{children}</button>;
+  return (
+    <button className={`btn ${v} disabled:cursor-not-allowed disabled:opacity-45 ${className}`} {...rest}>
+      {children}
+    </button>
+  );
 }
-
-/* ------------------------------------------------------------------ fields */
 
 export function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <div className="kicker mb-2">{label}</div>
+      <div className="mb-1.5 text-[14px] font-semibold text-ink">{label}</div>
       {children}
-      {hint && <div className="micro mt-1.5 text-faint">{hint}</div>}
+      {hint && <div className="mt-1.5 text-[13px] text-faint">{hint}</div>}
     </label>
   );
 }
 
-export const inputCls =
-  "w-full border border-rule bg-paper-2 px-3 py-2.5 text-[15px] text-ink outline-none placeholder:text-faint focus:bg-paper focus:ring-0";
+export const inputCls = "input";
 
 export function Alert({ kind = "info", children }: { kind?: "info" | "error" | "success" | "warn"; children: React.ReactNode }) {
-  const c = {
-    info: "border-ultra text-ink",
-    error: "border-danger text-danger",
-    success: "border-ink bg-hi text-ink",
-    warn: "border-flare-ink text-ink",
-  }[kind];
-  return <div className={`border-l-[3px] border-y border-r border-rule-soft px-3 py-2.5 text-[14px] ${c}`}>{children}</div>;
+  const tint = { info: "var(--color-blue)", error: "var(--color-rose)", success: "var(--color-green)", warn: "var(--color-amber)" }[kind];
+  return (
+    <div
+      className="rounded-xl border px-3.5 py-3 text-[14px] leading-relaxed"
+      style={{
+        background: `color-mix(in srgb, ${tint} 7%, white)`,
+        borderColor: `color-mix(in srgb, ${tint} 28%, white)`,
+        color: "var(--color-ink)",
+      }}
+    >
+      {children}
+    </div>
+  );
 }
 
-/** Big editorial statistic. */
-/** Big editorial statistic. `on` says what it sits on, so the kicker stays legible. */
-export function Stat({
-  value,
-  label,
-  on = "paper",
-}: {
-  value: React.ReactNode;
-  label: string;
-  on?: "paper" | "flare" | "ink";
-}) {
-  const valueTone = on === "ink" ? "text-flare" : "text-ink";
-  const labelTone = on === "paper" ? "text-mute" : on === "flare" ? "text-ink/70" : "text-paper/55";
-  const ruleTone = on === "ink" ? "border-paper/25" : "border-ink/25";
+export function Stat({ value, label, tint }: { value: React.ReactNode; label: string; tint?: string }) {
   return (
-    <div className={`border-t pt-3 ${ruleTone}`}>
-      <div className={`font-display text-[clamp(34px,4.4vw,58px)] leading-[0.85] ${valueTone}`}>{value}</div>
-      <div className={`kicker mt-2 ${labelTone}`}>{label}</div>
+    <div className="card p-4">
+      <div className="text-[clamp(24px,3vw,34px)] font-bold leading-none text-ink" style={tint ? { color: tint } : undefined}>
+        {value}
+      </div>
+      <div className="kicker mt-2">{label}</div>
     </div>
   );
 }

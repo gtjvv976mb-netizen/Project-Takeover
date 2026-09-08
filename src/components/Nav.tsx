@@ -7,8 +7,8 @@ import { useConfig } from "./ConfigContext";
 const WalletMultiButton = dynamic(async () => (await import("@solana/wallet-adapter-react-ui")).WalletMultiButton, { ssr: false });
 
 const LINKS = [
-  { href: "/", label: "Market" },
-  { href: "/sell", label: "List your work" },
+  { href: "/", label: "Browse" },
+  { href: "/sell", label: "Sell" },
   { href: "/dashboard", label: "My deals" },
   { href: "/how-it-works", label: "How it works" },
 ];
@@ -17,35 +17,39 @@ export function Nav() {
   const cfg = useConfig();
   const path = usePathname();
   return (
-    <header className="sticky top-0 z-40 border-b border-rule bg-paper">
-      <div className="mx-auto flex max-w-[1400px] items-stretch gap-4 px-4 sm:px-6">
-        <Link href="/" className="flex shrink-0 items-center gap-2.5 py-3.5">
-          <span className="grid h-6 w-6 grid-cols-2 border border-rule" aria-hidden>
-            <span className="bg-ink" /><span className="bg-flare" /><span className="bg-flare" /><span className="bg-ink" />
-          </span>
-          <span className="font-display text-[19px] uppercase leading-none tracking-tight">Project: Takeover</span>
+    <header className="sticky top-0 z-40 border-b border-line bg-bg/85 backdrop-blur-md">
+      <div className="wrap flex h-16 items-center gap-4">
+        <Link href="/" className="flex shrink-0 items-center gap-2.5">
+          <span className="h-8 w-8 rounded-xl" style={{ background: "linear-gradient(135deg, var(--color-brand), var(--color-teal))" }} aria-hidden />
+          <span className="text-[17px] font-bold tracking-tight text-ink">Project: Takeover</span>
         </Link>
-        <nav className="ml-auto flex items-stretch overflow-x-auto">
+
+        <nav className="ml-2 hidden items-center gap-1 md:flex">
           {LINKS.map((l) => (
-            <Link
-              key={l.href}
-              href={l.href}
-              aria-current={path === l.href ? "page" : undefined}
-              className="takeover takeover-under relative flex shrink-0 items-center px-3 font-mono text-[11px] uppercase tracking-[0.16em] text-mute transition-colors hover:text-ink aria-[current=page]:text-ink"
-            >
+            <Link key={l.href} href={l.href} aria-current={path === l.href ? "page" : undefined}
+              className={`rounded-lg px-3 py-2 text-[14px] font-semibold transition-colors ${path === l.href ? "bg-bg-2 text-ink" : "text-muted hover:bg-bg-2 hover:text-ink"}`}>
               {l.label}
             </Link>
           ))}
         </nav>
-        <div className="flex shrink-0 items-center gap-3 border-l border-rule pl-4">
+
+        <div className="ml-auto flex shrink-0 items-center gap-2">
           {cfg.network !== "mainnet-beta" && (
-            <span className="hidden items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.16em] text-flare-ink sm:flex">
-              <span className="live-sq" />{cfg.network}
-            </span>
+            <span className="pill hidden sm:inline-flex" style={{ ["--tint" as string]: "var(--color-amber)" }}>{cfg.network}</span>
           )}
           <WalletMultiButton />
         </div>
       </div>
+
+      {/* mobile nav */}
+      <nav className="flex gap-1 overflow-x-auto border-t border-line px-4 py-2 md:hidden">
+        {LINKS.map((l) => (
+          <Link key={l.href} href={l.href} aria-current={path === l.href ? "page" : undefined}
+            className={`shrink-0 rounded-lg px-3 py-1.5 text-[13px] font-semibold ${path === l.href ? "bg-bg-2 text-ink" : "text-muted"}`}>
+            {l.label}
+          </Link>
+        ))}
+      </nav>
     </header>
   );
 }

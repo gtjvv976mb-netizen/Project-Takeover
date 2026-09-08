@@ -18,21 +18,21 @@ export default function Dashboard() {
     return () => { cancelled = true; };
   }, [me]);
 
-  if (!me) return <p className="page text-mute">Connect your wallet to see your listings and purchases.</p>;
-  if (!items) return <p className="page text-mute">Loading…</p>;
+  if (!me) return <p className="wrap py-10 text-muted">Connect your wallet to see your listings and purchases.</p>;
+  if (!items) return <p className="wrap py-10 text-muted">Loading…</p>;
   const selling = items.filter((l) => l.seller === me);
   const buying = items.filter((l) => l.buyer === me);
   const needsAction = items.filter((l) => l.status === "draft" || l.status === "paid" || l.status === "disputed");
   return (
-    <div className="page space-y-12">
-      <div className="flex flex-wrap items-center gap-3 border border-rule-soft bg-paper-2 p-4">
-        <div className="flex-1 text-sm text-mute">Your builder page is what buyers check before they trust a listing. Keep it current.</div>
+    <div className="wrap py-10 space-y-12">
+      <div className="flex flex-wrap items-center gap-3 border border-line bg-bg-2 p-4">
+        <div className="flex-1 text-sm text-muted">Your builder wrap py-10 is what buyers check before they trust a listing. Keep it current.</div>
         <Link href={`/builders/${me}`}><Button variant="secondary">View / edit builder profile</Button></Link>
         <Link href="/sell"><Button>List new work</Button></Link>
       </div>
       {needsAction.length > 0 && (
         <section>
-          <h2 className="mb-3 text-lg font-semibold text-flare-ink">Needs your attention</h2>
+          <h2 className="mb-3 text-lg font-semibold text-brand">Needs your attention</h2>
           <div className="grid gap-4 md:grid-cols-2">{needsAction.map((l) => <ListingCard key={l.id} l={l} />)}</div>
         </section>
       )}

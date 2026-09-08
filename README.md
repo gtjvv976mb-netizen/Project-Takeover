@@ -21,36 +21,29 @@ listing carries a proof-of-work block read from chain (supply, authorities, hold
 Private keys are never sold. A copied key is never truly transferred, so the app sells what a wallet
 *controls* instead.
 
-## The site
+## The design
 
-Project: Takeover is a light, warm-newsprint trade paper that settles Solana handovers
-through escrow. Anton headlines, 1px hairlines, no border radius, one vermillion, one
-highlighter, one verification blue.
+A light, colourful, card-based interface. White cards on a tinted lavender ground, soft
+shadows, generous rounding, and one colour per asset category so the market is readable
+at a glance: violet for token controls, tangerine for pump.fun coins, teal for whole
+projects.
 
-**The signature move.** Every listing is a full-width index row on a rule. Point at one,
-or tab to it, and a solid black bar wipes across in 380ms and inverts it: the title goes
-to paper, the price to vermillion, an arrow slides in. On leave the bar retracts to the
-right, so it reads as a physical bar passing over the row rather than a fill animating
-out. That single gesture is the product, repeated down the page. It is one pseudo-element
-and one `scaleX`, it works on keyboard focus, and under reduced motion it becomes
-instantaneous rather than absent.
+**Every project is visual.** Each card carries artwork, the name, a two-line description,
+proof chips read from chain, and the price. If a token has a real image we use it;
+otherwise `CoverArt` generates a gradient composition from a hash of the listing id, so
+the art is unique per project, identical on every render, and the grid is colourful before
+anyone uploads anything.
 
-**What makes it feel alive.** The masthead carries the real Solana slot height, polled
-every 2s and advanced locally between polls, so a nine-digit number is always physically
-rolling even with zero listings. Counters count up once on reveal, the activity tape runs
-as a marquee that pauses on hover, status squares pulse out of phase so the page twinkles
-instead of ticking like a metronome, and headline lines rise out of a mask on scroll.
-
-**Motion rules.** Loops animate `transform` and `opacity` only. `box-shadow`, `filter`,
-`width`/`height` and `background-position` are never animated. At most two rAF loops are
-alive at once. `prefers-reduced-motion` is honoured in one authoritative block and the JS
-loops never start under it.
+**Motion is light.** Three slow blurred colour fields drift behind the hero, cards lift
+toward their category colour on hover, sections fade up on scroll, and the activity strip
+scrolls and pauses on hover. The Solana slot height in the header and footer is real,
+polled every two seconds. Everything respects `prefers-reduced-motion`.
 
 ## Stack
 
 - Next.js 16 (App Router, TypeScript, Tailwind v4), React 19
-- No animation or 3D dependencies. Everything moves with CSS plus three small hooks
-  (`IntersectionObserver` reveal, a one-shot rAF count-up, an interval word roll)
+- No animation, charting or 3D dependencies. Motion is CSS plus two small hooks
+  (an `IntersectionObserver` reveal and a one-shot rAF count-up)
 - `@solana/web3.js` v1, `@solana/spl-token`, Solana Wallet Adapter (Wallet Standard: Phantom, Solflare, Backpack…)
 - SQLite via Node's built-in `node:sqlite` (Node ≥ 22.13 / 24) — no native deps
 - Wallet-signature auth for every mutating API call (`tweetnacl` verify, 5-minute window)

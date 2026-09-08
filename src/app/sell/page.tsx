@@ -67,14 +67,14 @@ export default function Sell() {
     } catch (e) { setError((e as Error).message); } finally { setBusy(null); }
   }
 
-  if (!me) return <p className="page text-mute">Connect your wallet to create a listing.</p>;
+  if (!me) return <p className="wrap py-10 text-muted">Connect your wallet to create a listing.</p>;
 
   if (created && created.status === "draft") {
     return (
-      <div className="page page-narrow space-y-5">
+      <div className="wrap py-10 max-w-3xl space-y-5">
         <h1 className="text-2xl font-bold">Step 2 · Move authorities into escrow</h1>
-        <p className="text-mute">Your listing is saved as a draft. To go live, sign one transaction that transfers the selected authorities to the escrow wallet <span className="font-mono text-xs">{shortKey(cfg.escrowPubkey, 6)}</span>. You can cancel later and they come straight back.</p>
-        <ul className="list-disc pl-5 text-sm text-mute">{authorities.map((a) => <li key={a}>{AUTH_LABELS[a]}</li>)}</ul>
+        <p className="text-muted">Your listing is saved as a draft. To go live, sign one transaction that transfers the selected authorities to the escrow wallet <span className="font-mono text-xs">{shortKey(cfg.escrowPubkey, 6)}</span>. You can cancel later and they come straight back.</p>
+        <ul className="list-disc pl-5 text-sm text-muted">{authorities.map((a) => <li key={a}>{AUTH_LABELS[a]}</li>)}</ul>
         {error && <Alert kind="error">{error}</Alert>}
         <Button onClick={escrow} disabled={!!busy}>{busy ?? "Transfer to escrow & publish"}</Button>
       </div>
@@ -84,14 +84,14 @@ export default function Sell() {
   const canSubmit = title && Number(priceSol) >= 0.01 && (type === "offchain" ? deliverables : token && (type === "pump_creator" || authorities.length > 0));
 
   return (
-    <div className="page page-narrow space-y-6">
+    <div className="wrap py-10 max-w-3xl space-y-6">
       <h1 className="text-2xl font-bold">Put your work on the market</h1>
-      <p className="text-sm text-mute">You built it. Prove it on-chain, price it in SOL, and let someone who wants to run it take over. Escrow protects both sides.</p>
+      <p className="text-sm text-muted">You built it. Prove it on-chain, price it in SOL, and let someone who wants to run it take over. Escrow protects both sides.</p>
 
       <Field label="What are you selling?">
         <div className="grid gap-2 sm:grid-cols-3">
           {(Object.keys(TYPE_LABELS) as ListingType[]).map((t) => (
-            <button key={t} type="button" onClick={() => setType(t)} className={` border px-3 py-2 text-left text-sm ${type === t ? "border-ember bg-flare/10" : "border-rule-soft bg-paper-2 hover:bg-paper-2"}`}>{TYPE_LABELS[t]}</button>
+            <button key={t} type="button" onClick={() => setType(t)} className={` border px-3 py-2 text-left text-sm ${type === t ? "border-ember bg-brand/10" : "border-line bg-bg-2 hover:bg-bg-2"}`}>{TYPE_LABELS[t]}</button>
           ))}
         </div>
       </Field>
@@ -105,7 +105,7 @@ export default function Sell() {
             </div>
           </Field>
           {token && (
-            <div className=" border border-rule-soft bg-paper-2 p-4">
+            <div className=" border border-line bg-bg-2 p-4">
               <div className="flex items-center gap-3">
                 <TokenAvatar image={token.image} symbol={token.symbol} />
                 <div>
@@ -119,7 +119,7 @@ export default function Sell() {
                     const cur = k === "mint" ? token.mintAuthority : k === "freeze" ? token.freezeAuthority : token.updateAuthority;
                     const mine = cur === me;
                     return (
-                      <label key={k} className={`flex items-center gap-3  border px-3 py-2 text-sm ${mine ? "border-rule-soft" : "border-white/5 opacity-50"}`}>
+                      <label key={k} className={`flex items-center gap-3  border px-3 py-2 text-sm ${mine ? "border-line" : "border-white/5 opacity-50"}`}>
                         <input type="checkbox" disabled={!mine} checked={authorities.includes(k)} onChange={(e) => setAuthorities(e.target.checked ? [...authorities, k] : authorities.filter((x) => x !== k))} />
                         <span className="flex-1">{AUTH_LABELS[k]}</span>
                         <span className="font-mono text-xs text-faint">{cur ? (mine ? "you" : shortKey(cur)) : "revoked"}</span>

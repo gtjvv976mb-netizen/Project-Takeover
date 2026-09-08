@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Anton, Inter_Tight, JetBrains_Mono } from "next/font/google";
+import { Plus_Jakarta_Sans, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { appConfig } from "@/lib/solana";
 import { WalletProviders } from "@/components/WalletProviders";
@@ -7,8 +7,8 @@ import { ConfigProvider } from "@/components/ConfigContext";
 import { Nav } from "@/components/Nav";
 import { SiteFooter } from "@/components/SiteFooter";
 
-const display = Anton({ subsets: ["latin"], weight: ["400"], variable: "--font-anton", display: "swap" });
-const ui = Inter_Tight({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-ui", display: "swap" });
+const display = Plus_Jakarta_Sans({ subsets: ["latin"], weight: ["600", "700", "800"], variable: "--font-display-face", display: "swap" });
+const ui = Inter({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-ui", display: "swap" });
 const mono = JetBrains_Mono({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-mono-face", display: "swap" });
 
 export const metadata: Metadata = {
@@ -26,7 +26,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ConfigProvider config={config}>
           <WalletProviders rpcUrl={config.rpcUrl}>
             <Nav />
-            <main className="relative z-[2]">{children}</main>
+            <main>{children}</main>
             <SiteFooter config={config} />
           </WalletProviders>
         </ConfigProvider>
