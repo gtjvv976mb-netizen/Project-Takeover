@@ -39,6 +39,16 @@ toward their category colour on hover, sections fade up on scroll, and the activ
 scrolls and pauses on hover. The Solana slot height in the header and footer is real,
 polled every two seconds. Everything respects `prefers-reduced-motion`.
 
+## Live on devnet
+
+| | |
+| --- | --- |
+| Program | [`B6sQ8s6rikSPqwPhm6XPpy16mVuJ87raCcVFXMA6sSVG`](https://explorer.solana.com/address/B6sQ8s6rikSPqwPhm6XPpy16mVuJ87raCcVFXMA6sSVG?cluster=devnet) |
+| Config account | `EsfWYLtLBDA9DxGfCMm6rrxRJ2SJ41xbRiPSmVMHonJV` |
+| Fee | 200 bps (2%), capped at 500 bps in the program |
+
+Unaudited. Devnet only — do not point this at mainnet funds.
+
 ## Who holds the money
 
 Nobody. The buyer's SOL and the seller's token authorities live in accounts owned by the
