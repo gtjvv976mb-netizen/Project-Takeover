@@ -109,7 +109,10 @@ export interface ListingEvent {
 export interface AppConfig {
   network: "devnet" | "mainnet-beta" | "testnet";
   rpcUrl: string;
-  escrowPubkey: string;
+  /** The on-chain escrow program. Funds live in accounts it owns; no key exists for them. */
+  programId: string;
+  /** Where the platform fee goes. */
+  treasury: string;
   feeBps: number;
   appName: string;
 }

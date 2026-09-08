@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { api, signedPost } from "@/lib/client/api";
-import { escrowAuthoritiesTx } from "@/lib/client/tx";
+import { createListingOnChain, escrowAuthorityOnChain } from "@/lib/client/program";
 import { useConfig } from "@/components/ConfigContext";
 import { Alert, Button, Field, inputCls, TokenAvatar } from "@/components/ui";
 import { OFFCHAIN_CATEGORY_LABELS, shortKey, TYPE_LABELS, type AuthorityKind, type Listing, type ListingType, type OffchainAsset, type TokenInfo } from "@/lib/types";
@@ -55,14 +55,25 @@ export default function Sell() {
     } catch (e) { setError((e as Error).message); } finally { setBusy(null); }
   }
 
+  /**
+   * Open the listing on chain, then hand each authority to the program. Both are
+   * signed by the seller; the site never holds a key that could do this for them.
+   */
   async function escrow() {
     if (!created) return;
     setError(null);
     try {
-      setBusy("Approve the transfer in your wallet…");
-      const sig = await escrowAuthoritiesTx(connection, wallet, mint.trim(), authorities, cfg.escrowPubkey);
-      setBusy("Verifying on-chain…");
-      await signedPost(wallet, `/api/listings/${created.id}/verify-escrow`, "verify-escrow", created.id, { signature: sig });
+      setBusy("Approve the listing in your wallet…");
+      await createListingOnChain(connection, wallet, {
+        id: created.id, type: created.type, priceLamports: created.priceLamports,
+        authorities, mint: mint.trim(),
+      });
+      for (const [i, which] of authorities.entries()) {
+        setBusy(`Handing over ${AUTH_LABELS[which].split(" (")[0]} (${i + 1}/${authorities.length})…`);
+        await escrowAuthorityOnChain(connection, wallet, { id: created.id, which, mint: mint.trim() });
+      }
+      setBusy("Confirming on chain…");
+      await fetch(`/api/listings/${created.id}/sync`, { method: "POST" });
       router.push(`/listings/${created.id}`);
     } catch (e) { setError((e as Error).message); } finally { setBusy(null); }
   }
@@ -72,11 +83,15 @@ export default function Sell() {
   if (created && created.status === "draft") {
     return (
       <div className="wrap py-10 max-w-3xl space-y-5">
-        <h1 className="text-2xl font-bold">Step 2 · Move authorities into escrow</h1>
-        <p className="text-muted">Your listing is saved as a draft. To go live, sign one transaction that transfers the selected authorities to the escrow wallet <span className="font-mono text-xs">{shortKey(cfg.escrowPubkey, 6)}</span>. You can cancel later and they come straight back.</p>
+        <h1 className="text-2xl font-bold">Step 2 · Hand the controls to the program</h1>
+        <p className="text-muted">
+          Your listing is saved. To go live, hand the selected authorities to the escrow program
+          <span className="font-mono text-xs"> {shortKey(cfg.programId, 6)}</span>. Nobody holds a key to it,
+          so no person can take them, and cancelling returns them to you at any time before a sale.
+        </p>
         <ul className="list-disc pl-5 text-sm text-muted">{authorities.map((a) => <li key={a}>{AUTH_LABELS[a]}</li>)}</ul>
         {error && <Alert kind="error">{error}</Alert>}
-        <Button onClick={escrow} disabled={!!busy}>{busy ?? "Transfer to escrow & publish"}</Button>
+        <Button onClick={escrow} disabled={!!busy}>{busy ?? "Hand over & publish"}</Button>
       </div>
     );
   }
@@ -86,7 +101,7 @@ export default function Sell() {
   return (
     <div className="wrap py-10 max-w-3xl space-y-6">
       <h1 className="text-2xl font-bold">Put your work on the market</h1>
-      <p className="text-sm text-muted">You built it. Prove it on-chain, price it in SOL, and let someone who wants to run it take over. Escrow protects both sides.</p>
+      <p className="text-sm text-muted">You built it. Prove it on-chain, price it in SOL, and let someone who wants to run it take over. An on-chain program holds the escrow, so neither side has to trust us.</p>
 
       <Field label="What are you selling?">
         <div className="grid gap-2 sm:grid-cols-3">

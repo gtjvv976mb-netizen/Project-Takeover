@@ -40,8 +40,9 @@ export function SiteFooter({ config }: { config: AppConfig }) {
             <div className="text-muted">Fee {config.feeBps / 100}% · {config.network}</div>
           </div>
           <div className="space-y-2">
-            <div className="kicker">Escrow wallet</div>
-            <div className="mono break-all text-[12px] text-faint">{config.escrowPubkey}</div>
+            <div className="kicker">Escrow program</div>
+            <div className="mono break-all text-[12px] text-faint">{config.programId}</div>
+            <div className="text-[12px] text-faint">Funds sit in accounts this program owns. Nobody holds a key to them, including us.</div>
           </div>
         </div>
 

@@ -31,7 +31,7 @@ const FEE_BPS = 200;
 let ctx: ProgramTestContext;
 let provider: BankrunProvider;
 let program: Program<TakeoverEscrow>;
-let admin: Keypair, arbitrator: Keypair, treasury: Keypair, seller: Keypair, buyer: Keypair, stranger: Keypair;
+let admin: Keypair, arbitrator: Keypair, treasury: Keypair, seller: Keypair, buyer: Keypair, stranger: Keypair, cranker: Keypair;
 let configPda: PublicKey;
 
 const idBytes = (s: string) => {
@@ -106,7 +106,7 @@ async function expectFail(promise: Promise<unknown>, needle: string) {
 
 before(async () => {
   admin = Keypair.generate(); arbitrator = Keypair.generate(); treasury = Keypair.generate();
-  seller = Keypair.generate(); buyer = Keypair.generate(); stranger = Keypair.generate();
+  seller = Keypair.generate(); buyer = Keypair.generate(); stranger = Keypair.generate(); cranker = Keypair.generate();
 
   ctx = await startAnchor(".", [], []);
   // The provider's own wallet (bankrun's funded payer) covers transaction fees.
@@ -273,10 +273,13 @@ describe("escrowed deals cannot strand a buyer", () => {
   it("lets ANYONE refund the buyer once the deadline passes", async () => {
     await setClockAhead(86_400 + 60);
     const before = await ctx.banksClient.getBalance(buyer.publicKey);
-    // a third party, not the buyer, cranks the refund
+    // A third party, not the buyer, cranks the refund. Deliberately a different wallet
+    // from the one that tried too early: an identical transaction from the same signer
+    // under an unchanged blockhash would carry an identical signature, which the runtime
+    // rejects as already processed.
     await program.methods.refund()
-      .accounts({ config: configPda, listing, signer: stranger.publicKey, seller: seller.publicKey, buyer: buyer.publicKey, treasury: treasury.publicKey })
-      .signers([stranger]).rpc();
+      .accounts({ config: configPda, listing, signer: cranker.publicKey, seller: seller.publicKey, buyer: buyer.publicKey, treasury: treasury.publicKey })
+      .signers([cranker]).rpc();
     const after = await ctx.banksClient.getBalance(buyer.publicKey);
     assert.equal(after - before, BigInt(3 * LAMPORTS_PER_SOL), "buyer got the whole deposit back");
     const l = await program.account.listing.fetch(listing);

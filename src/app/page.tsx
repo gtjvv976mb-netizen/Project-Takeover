@@ -254,7 +254,7 @@ export default function Home() {
     return () => { off = true; };
   }, []);
 
-  const all = listings ?? [];
+  const all = useMemo(() => listings ?? [], [listings]);
   const counts = useMemo(() => {
     const c: Record<ListingType, number> = { token_authority: 0, pump_creator: 0, offchain: 0 };
     for (const l of all) if (l.status === "active") c[l.type]++;

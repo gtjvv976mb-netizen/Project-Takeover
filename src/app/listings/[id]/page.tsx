@@ -3,7 +3,7 @@ import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { api, signedPost } from "@/lib/client/api";
-import { payTx } from "@/lib/client/tx";
+import { buyTokenOnChain, cancelOnChain, disputeOnChain, fundOnChain, refundOnChain, releaseOnChain } from "@/lib/client/program";
 import { explorerUrl, useConfig } from "@/components/ConfigContext";
 import { Alert, Button, Chip, inputCls, StatusBadge, TypeBadge } from "@/components/ui";
 import { CoverArt } from "@/components/CoverArt";
@@ -22,10 +22,37 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [note, setNote] = useState("");
+  /** Deadline comes from the chain, not the index, so a stale row cannot hide a refund. */
+  const [deadline, setDeadline] = useState<number | null>(null);
+  /** Ticks once a minute so the refund button appears the moment the window closes. */
+  const [nowSec, setNowSec] = useState(() => Math.floor(Date.now() / 1000));
+  useEffect(() => {
+    const t = setInterval(() => setNowSec(Math.floor(Date.now() / 1000)), 30_000);
+    return () => clearInterval(t);
+  }, []);
   const [reason, setReason] = useState("");
 
-  const reload = useCallback(() => api.listing(id).then((r) => { setL(r.listing); setEvents(r.events); }), [id]);
-  useEffect(() => { reload().catch((e) => setError(e.message)); }, [reload]);
+  const reload = useCallback(async () => {
+    const r = await api.listing(id);
+    setL(r.listing);
+    setEvents(r.events);
+    // refresh the authoritative state from the program itself
+    try {
+      const chain = await fetch(`/api/listings/${id}/sync`, { method: "POST" }).then((x) => x.json());
+      if (chain?.onChain) {
+        setDeadline(chain.deadline || null);
+        if (chain.listing) setL(chain.listing);
+      }
+    } catch { /* index still renders without it */ }
+  }, [id]);
+  useEffect(() => {
+    let cancelled = false;
+    // reload() awaits the network before it touches state, so nothing is set during
+    // this effect's synchronous body; the rule cannot see through the async boundary.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    reload().catch((e) => { if (!cancelled) setError((e as Error).message); });
+    return () => { cancelled = true; };
+  }, [reload]);
 
   async function run(label: string, fn: () => Promise<unknown>) {
     setError(null); setNotice(null); setBusy(label);
@@ -38,16 +65,42 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
   const fee = Math.floor((l.priceLamports * cfg.feeBps) / 10_000);
   const tx = (sig: string | null) => sig && <a className="font-mono text-xs text-blue underline" href={explorerUrl(cfg, "tx", sig)} target="_blank" rel="noreferrer">{shortKey(sig, 6)}</a>;
 
-  const buy = () => run("Approve payment in your wallet…", async () => {
-    const sig = await payTx(connection, wallet, cfg.escrowPubkey, l.priceLamports);
-    setBusy("Verifying payment & settling…");
-    await signedPost(wallet, `/api/listings/${l.id}/pay`, "pay", l.id, { signature: sig });
+  const includesMetadata = l.type === "token_authority" && (l.asset as TokenAuthorityAsset).authorities.includes("metadata_update");
+  const parties = { id: l.id, seller: l.seller, buyer: l.buyer ?? l.seller, treasury: cfg.treasury };
+  const sync = () => fetch(`/api/listings/${l.id}/sync`, { method: "POST" });
+
+  /**
+   * Every one of these is signed by the user and executed by the program. The server
+   * is told afterwards only so the search index stays current.
+   */
+  const act = (label: string, fn: () => Promise<string>) =>
+    run(label, async () => { await fn(); setBusy("Confirming on chain…"); await sync(); });
+
+  /** Pays the seller and moves the authorities in a single instruction. */
+  const buy = () => act("Approve the purchase in your wallet…", () =>
+    buyTokenOnChain(connection, wallet, { id: l.id, seller: l.seller, treasury: cfg.treasury, mint: l.mint!, includesMetadata }));
+
+  const fund = () => act("Approve the deposit in your wallet…", () =>
+    fundOnChain(connection, wallet, { id: l.id, seller: l.seller }));
+
+  const release = () => act("Releasing the funds…", () => releaseOnChain(connection, wallet, parties));
+
+  const claimRefund = () => act("Reclaiming your deposit…", () => refundOnChain(connection, wallet, parties));
+
+  const openDispute = () => act("Freezing the funds…", async () => {
+    const sig = await disputeOnChain(connection, wallet, { id: l.id, seller: l.seller });
+    if (reason.trim()) await signedPost(wallet, `/api/listings/${l.id}/dispute`, "dispute", l.id, { reason });
+    return sig;
   });
-  const post = (path: string, action: string, body: Record<string, unknown> = {}) => run("Waiting for signature…", () => signedPost(wallet, `/api/listings/${l.id}/${path}`, action, l.id, body));
-  const verifyHandoff = () => run("Checking pump.fun on-chain…", async () => {
-    const r = await signedPost<{ verified: boolean; creator: string | null }>(wallet, `/api/listings/${l.id}/verify-handoff`, "verify-handoff", l.id, { note });
-    setNotice(r.verified ? "Handoff verified on-chain. Funds released to the seller." : `Not yet: the bonding curve creator is still ${shortKey(r.creator)}. Transfer ownership on pump.fun, then retry.`);
-  });
+
+  const cancel = () => act("Cancelling…", () =>
+    cancelOnChain(connection, wallet, { id: l.id, mint: l.mint, includesMetadata }));
+
+  /** A delivery note is descriptive text, so it stays off chain in the index. */
+  const saveNote = () => run("Saving…", () =>
+    signedPost(wallet, `/api/listings/${l.id}/note`, "note", l.id, { note }));
+
+  const pastDeadline = deadline !== null && nowSec >= deadline;
 
   return (
     <div className="wrap py-10 grid gap-10 lg:grid-cols-[1fr_360px]">
@@ -134,41 +187,50 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
         {/* ----- buyer actions ----- */}
         {me && l.status === "active" && !isSeller && (
           <div className="space-y-2">
-            <Button className="w-full" onClick={buy} disabled={!!busy}>{busy ?? `Buy for ${formatSol(l.priceLamports)} SOL`}</Button>
-            <p className="text-xs text-faint">{l.type === "token_authority" ? "Authorities transfer to your wallet in the same transaction that pays the seller." : "Your SOL is held in escrow until the seller delivers and you (or on-chain verification) release it."}</p>
+            <Button className="w-full" onClick={l.type === "token_authority" ? buy : fund} disabled={!!busy}>
+              {busy ?? `Buy for ${formatSol(l.priceLamports)} SOL`}
+            </Button>
+            <p className="text-xs text-faint">
+              {l.type === "token_authority"
+                ? "The controls move to your wallet in the very same transaction that pays the seller. There is no moment where one side holds both."
+                : "Your SOL goes into an account the escrow program owns. The seller cannot touch it, and neither can we."}
+            </p>
           </div>
         )}
+
         {isBuyer && l.status === "paid" && (
           <div className="space-y-2">
-            {l.type === "token_authority" ? (
-              <Button className="w-full" onClick={() => post("settle", "settle")} disabled={!!busy}>{busy ?? "Retry settlement"}</Button>
-            ) : (
-              <>
-                {l.type === "pump_creator" && <Button className="w-full" onClick={verifyHandoff} disabled={!!busy}>{busy ?? "Verify handoff on-chain"}</Button>}
-                <Button className="w-full" variant="secondary" onClick={() => post("release", "release")} disabled={!!busy}>{busy ?? "I received it · release funds"}</Button>
-              </>
+            <Alert kind="info">Your {formatSol(l.priceLamports)} SOL is held by the escrow program.</Alert>
+            <Button className="w-full" onClick={release} disabled={!!busy}>{busy ?? "I received it · release funds"}</Button>
+            {pastDeadline && (
+              <Button className="w-full" variant="secondary" onClick={claimRefund} disabled={!!busy}>
+                {busy ?? "Delivery window passed · take my money back"}
+              </Button>
             )}
             <textarea className={inputCls} rows={2} placeholder="Problem? Describe it and open a dispute" value={reason} onChange={(e) => setReason(e.target.value)} />
-            <Button className="w-full" variant="danger" onClick={() => post("dispute", "dispute", { reason })} disabled={!!busy || !reason}>Open dispute</Button>
+            <Button className="w-full" variant="danger" onClick={openDispute} disabled={!!busy}>Open dispute</Button>
           </div>
         )}
 
         {/* ----- seller actions ----- */}
-        {isSeller && l.status === "draft" && <Link href="/sell"><Alert kind="warn">Draft: authorities not yet in escrow. Go to Sell to finish, or cancel below.</Alert></Link>}
+        {isSeller && l.status === "draft" && (
+          <Link href="/sell"><Alert kind="warn">Not live yet: the controls are still yours. Finish handing them over on the Sell page, or cancel below.</Alert></Link>
+        )}
         {isSeller && (l.status === "draft" || l.status === "active") && (
-          <Button className="w-full" variant="danger" onClick={() => post("cancel", "cancel")} disabled={!!busy}>{busy ?? "Cancel listing"}</Button>
+          <Button className="w-full" variant="danger" onClick={cancel} disabled={!!busy}>{busy ?? "Cancel listing"}</Button>
         )}
-        {isSeller && l.status === "paid" && l.type !== "token_authority" && (
+        {isSeller && l.status === "paid" && (
           <div className="space-y-2">
-            <Alert kind="success">Buyer has paid {formatSol(l.priceLamports)} SOL into escrow. Deliver now.</Alert>
-            {l.type === "pump_creator" && <p className="break-all text-xs text-muted">Transfer coin ownership to <span className="font-mono">{l.buyer}</span> on pump.fun, then verify below to get paid instantly.</p>}
-            <textarea className={inputCls} rows={3} placeholder="Delivery note for the buyer (what you handed over, where)" value={note} onChange={(e) => setNote(e.target.value)} />
-            <Button className="w-full" onClick={verifyHandoff} disabled={!!busy}>{busy ?? (l.type === "pump_creator" ? "Verify handoff & get paid" : "Mark as delivered")}</Button>
-            <Button className="w-full" variant="danger" onClick={() => post("dispute", "dispute", { reason: note || "Seller opened dispute" })} disabled={!!busy}>Open dispute</Button>
+            <Alert kind="success">The buyer has escrowed {formatSol(l.priceLamports)} SOL. Deliver to get paid.</Alert>
+            {l.type === "pump_creator" && (
+              <p className="break-all text-xs text-muted">
+                Transfer coin ownership to <span className="font-mono">{l.buyer}</span> on pump.fun, then ask them to release.
+              </p>
+            )}
+            <textarea className={inputCls} rows={3} placeholder="Delivery note for the buyer (what you handed over, and where)" value={note} onChange={(e) => setNote(e.target.value)} />
+            <Button className="w-full" variant="secondary" onClick={saveNote} disabled={!!busy || !note.trim()}>{busy ?? "Save delivery note"}</Button>
+            <Button className="w-full" variant="danger" onClick={openDispute} disabled={!!busy}>Open dispute</Button>
           </div>
-        )}
-        {isSeller && l.status === "paid" && l.type === "token_authority" && (
-          <Button className="w-full" onClick={() => post("settle", "settle")} disabled={!!busy}>{busy ?? "Retry settlement"}</Button>
         )}
       </aside>
     </div>

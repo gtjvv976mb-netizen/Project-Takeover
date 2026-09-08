@@ -39,6 +39,23 @@ toward their category colour on hover, sections fade up on scroll, and the activ
 scrolls and pauses on hover. The Solana slot height in the header and footer is real,
 polled every two seconds. Everything respects `prefers-reduced-motion`.
 
+## Who holds the money
+
+Nobody. The buyer's SOL and the seller's token authorities live in accounts owned by the
+`takeover-escrow` program, and no private key exists for them. The web server reads the
+chain and cannot sign anything; every action that moves money or ownership is signed by
+the user's own wallet.
+
+That means a compromise of this server gets an attacker a defaced website, not a treasury.
+
+- **Token sales never escrow money at all.** `buy_token` pays the seller and moves every
+  authority to the buyer in one instruction, so there is no window where one side holds both.
+- **Escrowed deals cannot strand a buyer.** `refund` is permissionless once the delivery
+  deadline passes, so nobody needs the operator's cooperation to get their money back.
+- **The arbitrator is bounded.** On a disputed deal it may only choose "pay the seller" or
+  "refund the buyer". It cannot redirect funds or touch an undisputed deal.
+- **The fee is frozen at listing time** and hard-capped at 5% in the program itself.
+
 ## Stack
 
 - Next.js 16 (App Router, TypeScript, Tailwind v4), React 19
@@ -47,6 +64,22 @@ polled every two seconds. Everything respects `prefers-reduced-motion`.
 - `@solana/web3.js` v1, `@solana/spl-token`, Solana Wallet Adapter (Wallet Standard: Phantom, Solflare, Backpack…)
 - SQLite via Node's built-in `node:sqlite` (Node ≥ 22.13 / 24) — no native deps
 - Wallet-signature auth for every mutating API call (`tweetnacl` verify, 5-minute window)
+
+## Run the program locally
+
+```bash
+npm run program:build                       # compile + regenerate the IDL
+solana-test-validator --reset \
+  --bpf-program metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s tests/fixtures/mpl_token_metadata.so
+solana program deploy target/deploy/takeover_escrow.so \
+  --program-id target/deploy/takeover_escrow-keypair.json
+node scripts/init-program.mjs --fee-bps 200 # create the config account
+npm run program:test                        # 21 adversarial tests
+node scripts/e2e-program.mjs                # drives the real site against the program
+```
+
+Point the app at it with `RPC_URL` and `NEXT_PUBLIC_RPC_URL` in `.env.local`, and set
+`TREASURY_PUBKEY` to the wallet that should receive fees.
 
 ## Run it
 
