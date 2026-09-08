@@ -1,25 +1,26 @@
 @import "tailwindcss";
 
-/* ---------- Project: Takeover theme · "targeting HUD" ----------
-   ink      deep, slightly blue-black surfaces
-   bone     warm off-white text
-   ember    primary action · the takeover itself
-   circuit  verified / read-from-chain data
-   lime     live, healthy, for sale
-   amber    SOL, money in escrow
+/* ---------- Project: Takeover theme · "night harbor" ----------
+   The site is a working harbor after dark. Listings are ships a builder launched.
+   ink      deep water and night sky
+   bone     moonlit off-white text
+   ember    pump.fun pier · primary action
+   circuit  verified, read-from-chain data · sites & socials pier
+   lime     token-authority pier · live and moored
+   amber    sodium dock lights · SOL
    danger   disputes and failures                                         */
 @theme {
-  --color-ink: #07080d;
-  --color-ink-2: #0d0f16;
-  --color-ink-3: #151823;
-  --color-line: rgba(236, 232, 222, 0.12);
-  --color-bone: #ece8de;
-  --color-mute: rgba(236, 232, 222, 0.55);
-  --color-ember: #ff6a3d;
-  --color-circuit: #3ee8ff;
-  --color-lime: #b8f04a;
-  --color-amber: #ffc260;
-  --color-danger: #ff4d6d;
+  --color-ink: #060a12;
+  --color-ink-2: #0b131e;
+  --color-ink-3: #13202e;
+  --color-line: rgba(232, 238, 245, 0.14);
+  --color-bone: #e8eef5;
+  --color-mute: rgba(232, 238, 245, 0.55);
+  --color-ember: #ff8a4c;
+  --color-circuit: #4cc7ff;
+  --color-lime: #46e5a0;
+  --color-amber: #ffc27a;
+  --color-danger: #ff5f6d;
   --font-sans: var(--font-display), "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-mono-face), "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
@@ -29,18 +30,20 @@ html, body { background: var(--color-ink); color: var(--color-bone); }
 body { font-family: var(--font-sans); }
 ::selection { background: var(--color-ember); color: var(--color-ink); }
 
-/* subtle scanlines over everything: the HUD feel */
+/* night-harbor vignette */
 body::after {
   content: ""; pointer-events: none; position: fixed; inset: 0; z-index: 4;
-  background: repeating-linear-gradient(0deg, rgba(255,255,255,0.025) 0 1px, transparent 1px 3px);
-  mix-blend-mode: overlay;
+  background: radial-gradient(ellipse at 50% 45%, transparent 45%, rgba(3,6,12,0.55) 100%);
 }
 
-/* bracket corners for cards and panels */
+/* bracket corners for cards and panels.
+   These live in @layer components so Tailwind utilities (which come later in the
+   cascade) can still override them — an unlayered `.hud` outranks every utility. */
+@layer components {
 .hud { position: relative; }
 .hud::before, .hud::after {
   content: ""; position: absolute; width: 12px; height: 12px; pointer-events: none;
-  border-color: var(--color-ember); border-style: solid; opacity: .55; transition: width .15s, height .15s, opacity .15s;
+  border-color: var(--color-amber); border-style: solid; opacity: .45; transition: width .15s, height .15s, opacity .15s;
 }
 .hud::before { top: -1px; left: -1px; border-width: 2px 0 0 2px; }
 .hud::after { bottom: -1px; right: -1px; border-width: 0 2px 2px 0; }
@@ -48,9 +51,11 @@ body::after {
 
 .tilt { transform-style: preserve-3d; transition: transform .15s ease, box-shadow .15s ease; }
 .label { font-family: var(--font-mono); font-size: 10px; letter-spacing: .22em; text-transform: uppercase; color: var(--color-mute); }
+.blink { animation: blink 1.4s steps(1) infinite; }
+}
+
 @keyframes ticker { from { transform: translateX(0); } to { transform: translateX(-50%); } }
 @keyframes blink { 50% { opacity: .2; } }
-.blink { animation: blink 1.4s steps(1) infinite; }
 
 .wallet-adapter-button-trigger { background: var(--color-ember) !important; color: var(--color-ink) !important; border-radius: 4px !important; height: 38px !important; font-size: 13px !important; font-family: var(--font-sans) !important; font-weight: 700 !important; }
 .wallet-adapter-modal-wrapper { background: var(--color-ink-2) !important; border: 1px solid var(--color-line); border-radius: 8px !important; }

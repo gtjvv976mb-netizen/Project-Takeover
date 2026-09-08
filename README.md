@@ -21,10 +21,36 @@ listing carries a proof-of-work block read from chain (supply, authorities, hold
 Private keys are never sold. A copied key is never truly transferred, so the app sells what a wallet
 *controls* instead.
 
+## The harbour
+
+The home page is not a page, it is a place. The market is rendered as a working
+harbour at night, because the product's verbs are already nautical: developers *ship*,
+a *chain* is what moors a vessel to a bollard, and escrow is a *lock* a ship passes
+through on its way to open water. The geography is the mission statement:
+
+| In the world | In the product |
+| --- | --- |
+| Three piers | The three asset types. Pier colour is the type; position along the pier is price, cheapest nearest the quay. |
+| A vessel | One listing. Hull silhouette is the asset type, size scales with price, brightness with status. |
+| The mooring chain | On-chain ownership. It is lit once the chain has verified the seller; a draft listing gets a slack, unlit rope. |
+| Bollards | Berths. A lit bollard is taken, a dashed hull outline on the water is a berth that is free. |
+| The lighthouse | The chain vouching. Its beam sweeps every hull in the basin. |
+| The lock | Escrow. The sign counts the deals currently holding buyers' SOL, and the chamber glows while money is in it. |
+| The anchorage | Sold projects, moored past the breakwater as a visible track record. |
+| The slipway | `/sell`. A half-built wireframe hull on the stocks. |
+| The sealed second gate | Room for a second chain, unbranded and unbuilt. |
+
+Navigation is drag to pan, scroll or pinch to zoom, click a hull to board it. Search
+(or `/`) dims everything that does not match; the chart in the corner is clickable;
+`quay` and `chart` are the two camera presets and `Escape` returns to the quay. With
+zero listings the harbour is fully built and honestly empty: numbered open berths, no
+fake vessels. `/market` is the same data as a plain list for anyone who prefers one.
+
 ## Stack
 
 - Next.js 16 (App Router, TypeScript, Tailwind v4), React 19
-- three.js with `@react-three/fiber` and `@react-three/drei` for the 3D marketplace
+- three.js with `@react-three/fiber` and `@react-three/drei` for the harbour (no new deps: instanced
+  hulls, a small water shader, `CameraControls`, and canvas-texture signage so no font is fetched at runtime)
 - `@solana/web3.js` v1, `@solana/spl-token`, Solana Wallet Adapter (Wallet Standard: Phantom, Solflare, Backpack…)
 - SQLite via Node's built-in `node:sqlite` (Node ≥ 22.13 / 24) — no native deps
 - Wallet-signature auth for every mutating API call (`tweetnacl` verify, 5-minute window)
@@ -94,6 +120,9 @@ ed25519 signature over `Takeover\naction: <action>\nlisting: <id|->\nts: <timest
 
 `node scripts/shots.mjs [outDir] [baseUrl]` screenshots the home page and `/sell` headlessly (needs Google Chrome
 installed; `playwright-core` is a devDependency). Output defaults to the gitignored `data/shots`.
+
+`node scripts/seed-demo.mjs` moors a demo fleet in the local database so the harbour can be reviewed with ships
+in it; `node scripts/seed-demo.mjs --clear` removes it again. Never run it against a real database.
 
 ## Environment
 

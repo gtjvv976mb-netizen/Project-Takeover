@@ -16,10 +16,11 @@ export function Nav() {
           {cfg.appName}
         </Link>
         <nav className="flex items-center gap-4 whitespace-nowrap text-sm text-mute">
-          <Link href="/" className="hover:text-white">Browse</Link>
-          <Link href="/sell" className="hover:text-white">List your work</Link>
-          <Link href="/dashboard" className="hover:text-white">My deals</Link>
-          <Link href="/how-it-works" className="hover:text-white">How it works</Link>
+          <Link href="/" className="hover:text-bone">Harbour</Link>
+          <Link href="/market" className="hover:text-bone">Register</Link>
+          <Link href="/sell" className="hover:text-bone">List your work</Link>
+          <Link href="/dashboard" className="hover:text-bone">My deals</Link>
+          <Link href="/how-it-works" className="hover:text-bone">How it works</Link>
         </nav>
         <div className="ml-auto flex items-center gap-3">
           {cfg.network !== "mainnet-beta" && (

@@ -9,9 +9,10 @@ import { WalletProviders } from "@/components/WalletProviders";
 import { ConfigProvider } from "@/components/ConfigContext";
 import { Nav } from "@/components/Nav";
 import { CursorGlow } from "@/components/CursorGlow";
+import { SiteFooter } from "@/components/SiteFooter";
 
 export const metadata: Metadata = {
-  title: "Project: Takeover — take over any Solana project",
+  title: "Project: Takeover — the harbour where Solana projects change hands",
   description: "Escrowed marketplace for token authorities, pump.fun coin ownership, sites and communities on Solana.",
 };
 export const dynamic = "force-dynamic";
@@ -26,10 +27,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <CursorGlow />
             <Nav />
             <main className="mx-auto max-w-6xl px-4 py-8">{children}</main>
-            <footer className="relative z-10 mx-auto max-w-6xl break-all bg-ink px-4 py-10 text-xs text-white/40">
-              <div className="label mb-2">Project: Takeover · independent · not affiliated with pump.fun or any company</div>
-              <span className="font-mono">escrow {config.escrowPubkey}</span> · fee {config.feeBps / 100}% · {config.network}
-            </footer>
+            <SiteFooter config={config} />
           </WalletProviders>
         </ConfigProvider>
       </body>
