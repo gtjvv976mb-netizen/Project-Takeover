@@ -1,48 +1,111 @@
+import Link from "next/link";
+
+const FLOWS = [
+  {
+    n: "01",
+    title: "Token authorities",
+    tag: "Fully on chain",
+    steps: [
+      "You pick which authorities are for sale: mint, freeze, and the Metaplex metadata update authority.",
+      "You sign one transaction moving them to the escrow wallet. The listing only goes live after the server confirms the transfer on chain.",
+      "A buyer pays the price into escrow. In a single transaction, escrow hands every authority to the buyer and pays you, minus the fee.",
+      "Cancel any time before a sale and the authorities come straight back to you.",
+    ],
+  },
+  {
+    n: "02",
+    title: "pump.fun coin ownership",
+    tag: "Verified against the curve",
+    steps: [
+      "pump.fun tokens have mint and update authority revoked, so what actually transfers is the creator role: the creator fees and who receives them.",
+      "The listing is checked against the bonding curve's on-chain creator field. Only the current creator can list.",
+      "A buyer pays into escrow. You transfer ownership using pump.fun's own tool.",
+      "Either side hits verify. The server reads the curve, and once the creator equals the buyer the funds release automatically.",
+    ],
+  },
+  {
+    n: "03",
+    title: "Projects, sites and communities",
+    tag: "Escrowed until delivered",
+    steps: [
+      "A buyer pays into escrow. You hand over the repo, domain, logins and admin roles, and leave a delivery note.",
+      "The buyer confirms delivery and the funds release.",
+      "If something is wrong, either side opens a dispute and an admin releases or refunds.",
+    ],
+  },
+];
+
 export default function HowItWorks() {
   return (
-    <article className="max-w-3xl">
-      <h1 className="text-3xl font-bold">How it works</h1>
-      <p className="mt-3 text-mute">Project: Takeover exists so independent developers who build real things on Solana have somewhere to show them, and someone to sell them to. Buyers get verified control, builders get paid, and the work keeps living.</p>
+    <>
+      <section className="border-b border-rule">
+        <div className="page pb-10">
+          <div className="kicker">How it works</div>
+          <h1 className="h1 mt-4">Nobody has<br />to trust anybody.</h1>
+          <p className="lead mt-6">
+            Three kinds of assets, three escrow flows. In every one of them the buyer&apos;s SOL sits in the escrow
+            wallet until the thing being sold has provably changed hands.
+          </p>
+        </div>
+      </section>
 
-      <h2 className="mt-8 text-xl font-semibold">For builders</h2>
-      <ul className="mt-2 list-disc space-y-1 pl-5 text-mute">
-        <li>Your wallet is your résumé. Every listing is tied to the wallet that provably owns the asset on-chain, and your builder page shows what you shipped, what sold, and what you earned.</li>
-        <li>List a full project (code + token + site), just a token&apos;s authorities, a pump.fun coin&apos;s creator role, or a site or community on its own.</li>
-        <li>Buyers see a proof-of-work block read straight from chain: supply, authorities, holder concentration, pump.fun status. Pitch less, prove more.</li>
-      </ul>
+      <section className="border-b border-rule">
+        <div className="page">
+          {FLOWS.map((f) => (
+            <div key={f.n} className="grid gap-6 border-b border-rule py-10 last:border-b-0 md:grid-cols-[6rem_1fr]">
+              <div>
+                <div className="numeral">{f.n}</div>
+              </div>
+              <div>
+                <h2 className="h2">{f.title}</h2>
+                <div className="mt-3 inline-block border border-ultra px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-ultra">
+                  {f.tag}
+                </div>
+                <ol className="mt-5 space-y-3">
+                  {f.steps.map((s, i) => (
+                    <li key={i} className="grid grid-cols-[2rem_1fr] gap-3 border-t border-rule-soft pt-3 text-[15px] leading-relaxed">
+                      <span className="mono text-mute">{String(i + 1).padStart(2, "0")}</span>
+                      <span>{s}</span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
 
-      <h2 className="mt-8 text-xl font-semibold">The escrow flows</h2>
-      <p className="mt-2 text-mute">Three kinds of assets, three escrow flows. In every case the buyer&apos;s SOL sits in the escrow wallet until the asset has provably changed hands.</p>
+      <section className="border-b border-rule bg-ink text-paper">
+        <div className="page">
+          <h2 className="h2 text-paper">We never sell wallets or private keys.</h2>
+          <p className="mt-5 max-w-[60ch] text-[16px] leading-relaxed text-paper/70">
+            A private key can be copied, so a wallet that has been &ldquo;sold&rdquo; is never really the buyer&apos;s.
+            Instead you sell what the wallet <em>controls</em>: authorities move on chain, and everything else goes
+            through a handover the escrow can verify or a human can arbitrate.
+          </p>
+          <div className="mt-10 grid gap-px bg-paper/15 sm:grid-cols-3">
+            {[
+              ["2%", "Platform fee, taken from the seller's payout only when a deal settles."],
+              ["0", "Private keys ever changing hands on this site."],
+              ["1 tx", "For a token handover: the buyer is paid out and the seller is paid in the same transaction."],
+            ].map(([k, v]) => (
+              <div key={k} className="bg-ink p-6">
+                <div className="font-display text-[52px] leading-none text-flare">{k}</div>
+                <p className="mt-3 text-[14px] leading-relaxed text-paper/60">{v}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
-      <h2 className="mt-8 text-xl font-semibold">1. Token authorities (fully on-chain)</h2>
-      <ul className="mt-2 list-disc space-y-1 pl-5 text-mute">
-        <li>Seller creates a listing and picks which authorities to sell: mint authority, freeze authority, and/or Metaplex metadata update authority.</li>
-        <li>Seller signs one transaction moving those authorities to the escrow wallet. The listing only goes live after the server verifies this on-chain.</li>
-        <li>Buyer pays the price into escrow. In a single atomic transaction the escrow transfers every authority to the buyer and pays the seller (minus the platform fee).</li>
-        <li>Seller can cancel any time before a sale; authorities are returned automatically.</li>
-      </ul>
-
-      <h2 className="mt-8 text-xl font-semibold">2. pump.fun coin ownership &amp; creator fees</h2>
-      <ul className="mt-2 list-disc space-y-1 pl-5 text-mute">
-        <li>pump.fun tokens have their mint and update authorities revoked, so the transferable asset is the <em>coin creator</em> role, which controls creator-fee recipients and fee splits.</li>
-        <li>The listing is verified against the bonding curve&apos;s on-chain creator field. Only the current creator can list.</li>
-        <li>Buyer pays into escrow. The seller then transfers ownership to the buyer&apos;s wallet using pump.fun&apos;s own transfer tool.</li>
-        <li>Either party clicks <strong>Verify handoff</strong>. The server reads the bonding curve; once the creator equals the buyer, funds release to the seller automatically. The buyer can also release manually.</li>
-      </ul>
-
-      <h2 className="mt-8 text-xl font-semibold">3. Websites, domains, socials, communities</h2>
-      <ul className="mt-2 list-disc space-y-1 pl-5 text-mute">
-        <li>Buyer pays into escrow. Seller hands over logins, DNS, admin roles, etc. off-platform and leaves a delivery note.</li>
-        <li>Buyer confirms delivery to release funds. If something is wrong, either side opens a dispute and an admin releases or refunds.</li>
-      </ul>
-
-      <h2 className="mt-8 text-xl font-semibold">Why we never sell wallets or private keys</h2>
-      <p className="mt-2 text-mute">
-        A private key can be copied, so a &quot;sold&quot; wallet is never truly the buyer&apos;s. Instead, list what the wallet <em>controls</em>: authorities move on-chain, and everything else goes through handoff escrow.
-      </p>
-
-      <h2 className="mt-8 text-xl font-semibold">Fees</h2>
-      <p className="mt-2 text-mute">A flat platform fee (default 2%) is deducted from the seller&apos;s payout at settlement. Buyers pay only Solana network fees.</p>
-    </article>
+      <section>
+        <div className="page flex flex-wrap items-center gap-6">
+          <h2 className="h2 flex-1">Ready to put<br />your work up?</h2>
+          <Link href="/sell" className="hard inline-flex items-center border border-ink bg-flare px-7 py-4 font-mono text-[12px] uppercase tracking-[0.16em]">
+            List your work →
+          </Link>
+        </div>
+      </section>
+    </>
   );
 }

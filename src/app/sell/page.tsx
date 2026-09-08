@@ -1,15 +1,12 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import dynamic from "next/dynamic";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { api, signedPost } from "@/lib/client/api";
 import { escrowAuthoritiesTx } from "@/lib/client/tx";
 import { useConfig } from "@/components/ConfigContext";
 import { Alert, Button, Field, inputCls, TokenAvatar } from "@/components/ui";
 import { OFFCHAIN_CATEGORY_LABELS, shortKey, TYPE_LABELS, type AuthorityKind, type Listing, type ListingType, type OffchainAsset, type TokenInfo } from "@/lib/types";
-
-const TokenTotem = dynamic(() => import("@/components/three/TokenTotem"), { ssr: false });
 
 const AUTH_LABELS: Record<AuthorityKind, string> = { mint: "Mint authority (can mint new supply)", freeze: "Freeze authority (can freeze token accounts)", metadata_update: "Metadata update authority (name, symbol, image)" };
 
@@ -70,11 +67,11 @@ export default function Sell() {
     } catch (e) { setError((e as Error).message); } finally { setBusy(null); }
   }
 
-  if (!me) return <p className="text-mute">Connect your wallet to create a listing.</p>;
+  if (!me) return <p className="page text-mute">Connect your wallet to create a listing.</p>;
 
   if (created && created.status === "draft") {
     return (
-      <div className="mx-auto max-w-xl space-y-4">
+      <div className="page page-narrow space-y-5">
         <h1 className="text-2xl font-bold">Step 2 · Move authorities into escrow</h1>
         <p className="text-mute">Your listing is saved as a draft. To go live, sign one transaction that transfers the selected authorities to the escrow wallet <span className="font-mono text-xs">{shortKey(cfg.escrowPubkey, 6)}</span>. You can cancel later and they come straight back.</p>
         <ul className="list-disc pl-5 text-sm text-mute">{authorities.map((a) => <li key={a}>{AUTH_LABELS[a]}</li>)}</ul>
@@ -87,14 +84,14 @@ export default function Sell() {
   const canSubmit = title && Number(priceSol) >= 0.01 && (type === "offchain" ? deliverables : token && (type === "pump_creator" || authorities.length > 0));
 
   return (
-    <div className="mx-auto max-w-xl space-y-5">
+    <div className="page page-narrow space-y-6">
       <h1 className="text-2xl font-bold">Put your work on the market</h1>
       <p className="text-sm text-mute">You built it. Prove it on-chain, price it in SOL, and let someone who wants to run it take over. Escrow protects both sides.</p>
 
       <Field label="What are you selling?">
         <div className="grid gap-2 sm:grid-cols-3">
           {(Object.keys(TYPE_LABELS) as ListingType[]).map((t) => (
-            <button key={t} type="button" onClick={() => setType(t)} className={`rounded border px-3 py-2 text-left text-sm ${type === t ? "border-ember bg-ember/10" : "border-line bg-ink-3 hover:bg-ink-3"}`}>{TYPE_LABELS[t]}</button>
+            <button key={t} type="button" onClick={() => setType(t)} className={` border px-3 py-2 text-left text-sm ${type === t ? "border-ember bg-flare/10" : "border-rule-soft bg-paper-2 hover:bg-paper-2"}`}>{TYPE_LABELS[t]}</button>
           ))}
         </div>
       </Field>
@@ -107,14 +104,13 @@ export default function Sell() {
               <Button variant="secondary" onClick={lookup} disabled={!mint || !!busy}>Look up</Button>
             </div>
           </Field>
-          {token && <TokenTotem token={token} included={type === "token_authority" ? authorities : []} className="h-[300px]" />}
           {token && (
-            <div className="rounded-md border border-line bg-ink-2 p-4">
+            <div className=" border border-rule-soft bg-paper-2 p-4">
               <div className="flex items-center gap-3">
                 <TokenAvatar image={token.image} symbol={token.symbol} />
                 <div>
-                  <div className="font-semibold">{token.name ?? "Unnamed"} {token.symbol && <span className="text-white/50">${token.symbol}</span>}</div>
-                  <div className="text-xs text-white/50">{token.pump ? `pump.fun coin · creator ${shortKey(token.pump.creator)}${token.pump.complete ? " · graduated" : " · bonding"}` : "SPL token"}</div>
+                  <div className="font-semibold">{token.name ?? "Unnamed"} {token.symbol && <span className="text-faint">${token.symbol}</span>}</div>
+                  <div className="text-xs text-faint">{token.pump ? `pump.fun coin · creator ${shortKey(token.pump.creator)}${token.pump.complete ? " · graduated" : " · bonding"}` : "SPL token"}</div>
                 </div>
               </div>
               {type === "token_authority" && (
@@ -123,10 +119,10 @@ export default function Sell() {
                     const cur = k === "mint" ? token.mintAuthority : k === "freeze" ? token.freezeAuthority : token.updateAuthority;
                     const mine = cur === me;
                     return (
-                      <label key={k} className={`flex items-center gap-3 rounded border px-3 py-2 text-sm ${mine ? "border-line" : "border-white/5 opacity-50"}`}>
+                      <label key={k} className={`flex items-center gap-3  border px-3 py-2 text-sm ${mine ? "border-rule-soft" : "border-white/5 opacity-50"}`}>
                         <input type="checkbox" disabled={!mine} checked={authorities.includes(k)} onChange={(e) => setAuthorities(e.target.checked ? [...authorities, k] : authorities.filter((x) => x !== k))} />
                         <span className="flex-1">{AUTH_LABELS[k]}</span>
-                        <span className="font-mono text-xs text-white/40">{cur ? (mine ? "you" : shortKey(cur)) : "revoked"}</span>
+                        <span className="font-mono text-xs text-faint">{cur ? (mine ? "you" : shortKey(cur)) : "revoked"}</span>
                       </label>
                     );
                   })}

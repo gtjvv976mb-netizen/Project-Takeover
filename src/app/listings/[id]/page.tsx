@@ -1,16 +1,13 @@
 "use client";
 import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import dynamic from "next/dynamic";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { api, signedPost } from "@/lib/client/api";
 import { payTx } from "@/lib/client/tx";
 import { explorerUrl, useConfig } from "@/components/ConfigContext";
-import { Alert, Button, inputCls, StatusBadge, TokenAvatar, TypeBadge } from "@/components/ui";
+import { Alert, Button, Chip, inputCls, StatusBadge, TokenAvatar, TypeBadge } from "@/components/ui";
 import { formatSol, OFFCHAIN_CATEGORY_LABELS, shortKey, type Listing, type ListingEvent, type OffchainAsset, type PumpCreatorAsset, type TokenAuthorityAsset } from "@/lib/types";
 import { BuilderChip } from "@/components/Builder";
-
-const TokenTotem = dynamic(() => import("@/components/three/TokenTotem"), { ssr: false });
 
 export default function ListingPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -34,11 +31,11 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
     try { await fn(); await reload(); } catch (e) { setError((e as Error).message); } finally { setBusy(null); }
   }
 
-  if (!l) return <p className="text-white/50">{error ?? "Loading…"}</p>;
+  if (!l) return <p className="page text-mute">{error ?? "Loading…"}</p>;
   const isSeller = me === l.seller;
   const isBuyer = me === l.buyer;
   const fee = Math.floor((l.priceLamports * cfg.feeBps) / 10_000);
-  const tx = (sig: string | null) => sig && <a className="font-mono text-xs text-circuit underline" href={explorerUrl(cfg, "tx", sig)} target="_blank" rel="noreferrer">{shortKey(sig, 6)}</a>;
+  const tx = (sig: string | null) => sig && <a className="font-mono text-xs text-ultra underline" href={explorerUrl(cfg, "tx", sig)} target="_blank" rel="noreferrer">{shortKey(sig, 6)}</a>;
 
   const buy = () => run("Approve payment in your wallet…", async () => {
     const sig = await payTx(connection, wallet, cfg.escrowPubkey, l.priceLamports);
@@ -52,77 +49,77 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
   });
 
   return (
-    <div className="grid gap-8 lg:grid-cols-[1fr_360px]">
-      <div className="space-y-6">
-        <div className="flex items-start gap-4">
-          <TokenAvatar image={l.token?.image} symbol={l.token?.symbol ?? l.title} size={72} />
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2"><h1 className="text-2xl font-bold">{l.title}</h1><StatusBadge status={l.status} /></div>
-            <div className="mt-2 flex flex-wrap items-center gap-2"><TypeBadge type={l.type} />{l.token?.symbol && <span className="text-sm text-white/50">${l.token.symbol}</span>}</div>
+    <div className="page grid gap-10 lg:grid-cols-[1fr_360px]">
+      <div className="space-y-8">
+        <header className="border-b border-rule pb-6">
+          <div className="flex flex-wrap items-center gap-2">
+            <TypeBadge type={l.type} />
+            <StatusBadge status={l.status} />
+            {l.token?.symbol && <Chip>${l.token.symbol}</Chip>}
           </div>
-        </div>
+          <div className="mt-4 flex items-start gap-4">
+            <TokenAvatar image={l.token?.image} symbol={l.token?.symbol ?? l.title} size={64} />
+            <h1 className="h2 min-w-0 flex-1">{l.title}</h1>
+          </div>
+        </header>
 
-        {l.token && (
-          <TokenTotem token={l.token} included={l.type === "token_authority" ? (l.asset as TokenAuthorityAsset).authorities : []} status={l.status} className="h-[360px]" />
-        )}
+        <p className="whitespace-pre-wrap text-[17px] leading-relaxed">{l.description || "No description."}</p>
 
-        <p className="whitespace-pre-wrap text-bone/80">{l.description || "No description."}</p>
-
-        <section className="rounded-md border border-line bg-ink-2 p-4 text-sm">
-          <h2 className="mb-2 font-semibold">What&apos;s included</h2>
+        <section className="border-t border-rule pt-5 text-sm">
+          <h2 className="kicker mb-3">What&apos;s included</h2>
           {l.type === "token_authority" && (
             <ul className="list-disc space-y-1 pl-5 text-mute">
               {(l.asset as TokenAuthorityAsset).authorities.map((a) => <li key={a}>{a === "mint" ? "Mint authority" : a === "freeze" ? "Freeze authority" : "Metadata update authority"}</li>)}
-              <li className="break-all">Mint: <a className="font-mono text-circuit underline" href={explorerUrl(cfg, "address", l.mint!)} target="_blank" rel="noreferrer">{l.mint}</a></li>
+              <li className="break-all">Mint: <a className="font-mono text-ultra underline" href={explorerUrl(cfg, "address", l.mint!)} target="_blank" rel="noreferrer">{l.mint}</a></li>
             </ul>
           )}
           {l.type === "pump_creator" && (
             <ul className="list-disc space-y-1 pl-5 text-mute">
               <li>pump.fun coin creator role (creator-fee recipient and fee-split control)</li>
-              <li><a className="text-circuit underline" href={(l.asset as PumpCreatorAsset).pumpUrl} target="_blank" rel="noreferrer">View on pump.fun</a></li>
+              <li><a className="text-ultra underline" href={(l.asset as PumpCreatorAsset).pumpUrl} target="_blank" rel="noreferrer">View on pump.fun</a></li>
               <li>Current on-chain creator: <span className="font-mono">{shortKey(l.token?.pump?.creator, 6)}</span> {l.token?.pump?.complete ? "· graduated" : "· on bonding curve"}</li>
             </ul>
           )}
           {l.type === "offchain" && (
             <div className="space-y-2 text-mute">
               <div>Category: {OFFCHAIN_CATEGORY_LABELS[(l.asset as OffchainAsset).category] ?? (l.asset as OffchainAsset).category}</div>
-              {(l.asset as OffchainAsset).links.length > 0 && <ul className="list-disc pl-5">{(l.asset as OffchainAsset).links.map((u) => <li key={u}><a className="text-circuit underline" href={u} target="_blank" rel="noreferrer">{u}</a></li>)}</ul>}
-              <div className="whitespace-pre-wrap rounded bg-black/30 p-3">{(l.asset as OffchainAsset).deliverables}</div>
+              {(l.asset as OffchainAsset).links.length > 0 && <ul className="list-disc pl-5">{(l.asset as OffchainAsset).links.map((u) => <li key={u}><a className="text-ultra underline" href={u} target="_blank" rel="noreferrer">{u}</a></li>)}</ul>}
+              <div className="whitespace-pre-wrap bg-paper-2 p-3">{(l.asset as OffchainAsset).deliverables}</div>
             </div>
           )}
         </section>
 
         {l.token && (
-          <section className="hud rounded-sm border border-circuit/30 bg-ink-2 p-4 text-sm">
-            <h2 className="label mb-3 !text-circuit">Proof of work · read from chain</h2>
-            <dl className="grid grid-cols-2 gap-x-6 gap-y-1 font-mono text-xs text-bone/80 sm:grid-cols-3">
-              <dt className="text-white/45">Supply</dt><dd className="col-span-1 sm:col-span-2">{l.token.supply && l.token.decimals !== undefined ? (Number(l.token.supply) / 10 ** l.token.decimals).toLocaleString() : "—"}</dd>
-              <dt className="text-white/45">Mint authority</dt><dd className="col-span-1 sm:col-span-2">{l.token.mintAuthority ? shortKey(l.token.mintAuthority, 6) : "revoked (fixed supply)"}</dd>
-              <dt className="text-white/45">Freeze authority</dt><dd className="col-span-1 sm:col-span-2">{l.token.freezeAuthority ? shortKey(l.token.freezeAuthority, 6) : "revoked"}</dd>
-              <dt className="text-white/45">Metadata</dt><dd className="col-span-1 sm:col-span-2">{l.token.updateAuthority ? `mutable · ${shortKey(l.token.updateAuthority, 6)}` : "none"}</dd>
-              {l.token.holders && (<><dt className="text-white/45">Top 10 holders</dt><dd className="col-span-1 sm:col-span-2">{(l.token.holders.top10Share * 100).toFixed(1)}% of supply {l.token.holders.top10Share > 0.5 ? <span className="text-amber">· concentrated</span> : <span className="text-lime">· distributed</span>}</dd></>)}
-              {l.token.pump && (<><dt className="text-white/45">pump.fun</dt><dd className="col-span-1 sm:col-span-2">{l.token.pump.complete ? "graduated to Raydium/PumpSwap" : "on bonding curve"} · creator {shortKey(l.token.pump.creator, 6)}</dd></>)}
+          <section className="border-l-[3px] border-ultra bg-paper-2 p-4 text-sm">
+            <h2 className="kicker mb-3 text-ultra">Proof of work · read from chain</h2>
+            <dl className="grid grid-cols-2 gap-x-6 gap-y-1 font-mono text-xs text-ink sm:grid-cols-3">
+              <dt className="text-ink/45">Supply</dt><dd className="col-span-1 sm:col-span-2">{l.token.supply && l.token.decimals !== undefined ? (Number(l.token.supply) / 10 ** l.token.decimals).toLocaleString() : "—"}</dd>
+              <dt className="text-ink/45">Mint authority</dt><dd className="col-span-1 sm:col-span-2">{l.token.mintAuthority ? shortKey(l.token.mintAuthority, 6) : "revoked (fixed supply)"}</dd>
+              <dt className="text-ink/45">Freeze authority</dt><dd className="col-span-1 sm:col-span-2">{l.token.freezeAuthority ? shortKey(l.token.freezeAuthority, 6) : "revoked"}</dd>
+              <dt className="text-ink/45">Metadata</dt><dd className="col-span-1 sm:col-span-2">{l.token.updateAuthority ? `mutable · ${shortKey(l.token.updateAuthority, 6)}` : "none"}</dd>
+              {l.token.holders && (<><dt className="text-ink/45">Top 10 holders</dt><dd className="col-span-1 sm:col-span-2">{(l.token.holders.top10Share * 100).toFixed(1)}% of supply {l.token.holders.top10Share > 0.5 ? <span className="text-flare-ink">· concentrated</span> : <span className="text-ultra">· distributed</span>}</dd></>)}
+              {l.token.pump && (<><dt className="text-ink/45">pump.fun</dt><dd className="col-span-1 sm:col-span-2">{l.token.pump.complete ? "graduated to Raydium/PumpSwap" : "on bonding curve"} · creator {shortKey(l.token.pump.creator, 6)}</dd></>)}
             </dl>
-            <p className="mt-2 text-xs text-white/40">Snapshot taken when the listing was created. Verify live on the explorer before buying.</p>
+            <p className="mt-2 text-xs text-faint">Snapshot taken when the listing was created. Verify live on the explorer before buying.</p>
           </section>
         )}
 
         {l.deliveryNote && <Alert kind="info"><strong>Seller&apos;s delivery note:</strong> {l.deliveryNote}</Alert>}
         {l.disputeReason && <Alert kind="error"><strong>Dispute:</strong> {l.disputeReason}</Alert>}
 
-        <section className="text-sm">
-          <h2 className="mb-2 font-semibold">Activity</h2>
+        <section className="border-t border-rule pt-5 text-sm">
+          <h2 className="kicker mb-3">Activity</h2>
           <ol className="space-y-1 text-mute">
             {events.map((e) => (
-              <li key={e.id} className="flex gap-3"><span className="w-36 shrink-0 text-white/35">{new Date(e.createdAt).toLocaleString()}</span><span>{e.kind.replace(/_/g, " ")} {typeof e.data.signature === "string" && tx(e.data.signature)}{typeof e.data.error === "string" && <span className="text-danger"> — {e.data.error}</span>}</span></li>
+              <li key={e.id} className="flex gap-3"><span className="w-36 shrink-0 text-ink/35">{new Date(e.createdAt).toLocaleString()}</span><span>{e.kind.replace(/_/g, " ")} {typeof e.data.signature === "string" && tx(e.data.signature)}{typeof e.data.error === "string" && <span className="text-danger"> — {e.data.error}</span>}</span></li>
             ))}
           </ol>
         </section>
       </div>
 
-      <aside className="hud h-fit space-y-4 rounded-sm border border-line bg-ink-2 p-5 lg:sticky lg:top-20">
-        <div><div className="font-mono text-3xl font-medium text-amber">{formatSol(l.priceLamports)} <span className="text-base">SOL</span></div><div className="text-xs text-white/40">Seller receives {formatSol(l.priceLamports - fee)} SOL after {cfg.feeBps / 100}% fee</div></div>
-        <div className="space-y-1 text-xs text-white/50">
+      <aside className="h-fit space-y-4 border border-rule bg-paper p-5 lg:sticky lg:top-24">
+        <div><div className="font-mono text-3xl font-medium text-flare-ink">{formatSol(l.priceLamports)} <span className="text-base">SOL</span></div><div className="micro mt-1 text-mute">Seller receives {formatSol(l.priceLamports - fee)} SOL after {cfg.feeBps / 100}% fee</div></div>
+        <div className="space-y-1.5 border-t border-rule-soft pt-3 font-mono text-[11px] text-mute">
           <div className="flex items-center gap-2">Builder <BuilderChip wallet={l.seller} />{isSeller && <span>(you)</span>}</div>
           {l.buyer && <div>Buyer <span className="font-mono">{shortKey(l.buyer, 6)}</span>{isBuyer && " (you)"}</div>}
           {l.escrowSig && <div>Escrowed {tx(l.escrowSig)}</div>}
@@ -139,7 +136,7 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
         {me && l.status === "active" && !isSeller && (
           <div className="space-y-2">
             <Button className="w-full" onClick={buy} disabled={!!busy}>{busy ?? `Buy for ${formatSol(l.priceLamports)} SOL`}</Button>
-            <p className="text-xs text-white/40">{l.type === "token_authority" ? "Authorities transfer to your wallet in the same transaction that pays the seller." : "Your SOL is held in escrow until the seller delivers and you (or on-chain verification) release it."}</p>
+            <p className="text-xs text-faint">{l.type === "token_authority" ? "Authorities transfer to your wallet in the same transaction that pays the seller." : "Your SOL is held in escrow until the seller delivers and you (or on-chain verification) release it."}</p>
           </div>
         )}
         {isBuyer && l.status === "paid" && (

@@ -1,7 +1,7 @@
 {
   "name": "takeover",
   "version": "0.1.0",
-  "description": "Project: Takeover \u2014 an escrowed marketplace where independent Solana builders sell the projects, tokens and communities they shipped.",
+  "description": "Project: Takeover — an escrowed marketplace where independent Solana builders sell the projects, tokens and communities they shipped.",
   "license": "MIT",
   "engines": {
     "node": ">=22.13"
@@ -14,8 +14,6 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@react-three/drei": "^10.7.8",
-    "@react-three/fiber": "^9.7.0",
     "@solana/spl-token": "^0.4.15",
     "@solana/wallet-adapter-react": "^0.15.39",
     "@solana/wallet-adapter-react-ui": "^0.9.39",
@@ -25,7 +23,6 @@
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "server-only": "^0.0.1",
-    "three": "^0.185.1",
     "tweetnacl": "^1.0.3"
   },
   "devDependencies": {
@@ -33,7 +30,6 @@
     "@types/node": "^24.13.3",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@types/three": "^0.185.4",
     "eslint": "^9",
     "eslint-config-next": "16.3.4",
     "playwright-core": "^1.63.0",
