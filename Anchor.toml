@@ -1,0 +1,21 @@
+[toolchain]
+# Pin this, or anchor resolves "recommended for anchor 0.31.1" = solana 2.1.0, whose
+# Rust 1.79 cannot parse edition2024 dependencies.
+solana_version = "4.2.2"
+
+[features]
+resolution = true
+skip-lint = false
+
+[programs.localnet]
+takeover_escrow = "B6sQ8s6rikSPqwPhm6XPpy16mVuJ87raCcVFXMA6sSVG"
+
+[registry]
+url = "https://api.apr.dev"
+
+[provider]
+cluster = "localnet"
+wallet = "~/.config/solana/id.json"
+
+[scripts]
+test = "npx tsx tests/escrow.test.ts"

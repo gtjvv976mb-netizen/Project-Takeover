@@ -123,12 +123,51 @@ content in it; `node scripts/seed-demo.mjs --clear` removes them again. Never ru
 browser. `NEXT_PUBLIC_RPC_URL` is the **browser** endpoint returned by `/api/config` and handed to the wallet adapter,
 so it must be keyless and CORS-open. Node 22.13 or newer is required for the built-in `node:sqlite`.
 
+## The on-chain escrow (`programs/takeover-escrow`)
+
+An Anchor program that replaces the custodial escrow wallet. Funds sit in accounts the
+program owns and nobody holds a key for, so neither the operator nor an attacker who
+takes the server can move a user's money.
+
+| Instruction | Who | What it does |
+| --- | --- | --- |
+| `create_listing` | seller | Records the terms. The fee is frozen here, so it can never be raised on a live deal. |
+| `escrow_authority` | seller | Moves one token authority into the program's custody. The listing goes live once all promised authorities are in. |
+| `buy_token` | buyer | Pays the seller and transfers every authority to the buyer **in a single instruction**. No escrow window at all. |
+| `fund` | buyer | Deposits SOL for a pump.fun or project sale and starts the delivery clock. |
+| `release` | buyer | Confirms delivery and pays the seller. |
+| `refund` | **anyone** | Returns the deposit to the buyer once the deadline passes. |
+| `cancel` | seller | Withdraws an unsold listing; escrowed authorities go back. |
+| `dispute` / `resolve` | parties / arbitrator | Freeze, then pick a winner. |
+| `close_listing` | seller | Reclaims rent from a finished listing. |
+
+Three properties the tests pin down:
+
+- **A token sale cannot half-happen.** Payment and the authority transfer are one
+  instruction, so either both land or neither does.
+- **A buyer cannot be stranded.** `refund` is permissionless after the deadline, so a
+  vanished seller does not trap anyone's money and no operator has to intervene.
+- **The arbitrator cannot steal.** On a disputed deal it may only pay the seller or
+  refund the buyer, and it cannot touch an undisputed one.
+
+```bash
+npm run program:build   # builds the .so and regenerates the IDL
+npm run program:test    # 21 adversarial tests against solana-bankrun
+```
+
+The build script pins the Solana 4.2.2 toolchain deliberately; see the comment at the
+top of `scripts/build-program.sh` for why. Building needs Rust, the Anza toolchain and
+Anchor 0.31.1 (via `avm`).
+
+> **Unaudited.** This program is devnet-only. Do not put mainnet funds through it until
+> it has been independently reviewed.
+
 ## Before mainnet
 
 1. **Paid RPC** (Helius/Triton/QuickNode) for both `RPC_URL` and `NEXT_PUBLIC_RPC_URL`.
-2. **Escrow key custody**: hardware-backed or KMS-held key, never on the web box's disk. Better still, replace the
-   custodial escrow wallet with an Anchor escrow program (listing PDA holds authorities + SOL; settlement is a
-   single permissionless instruction). The route handlers are already shaped for that swap.
+2. **Escrow key custody**: the Anchor program in `programs/takeover-escrow` now exists and is tested; what remains is
+   an independent audit and rewiring the API routes to build program transactions for the browser to sign, rather
+   than signing with a server-held key.
 3. **Postgres** instead of SQLite once you have more than one server instance.
 4. **pump.fun creator handoff**: the bonding-curve `creator` read at byte offset 49 is best-effort. Verify against
    pump.fun's current program layout (they shipped fee-splitting across up to 10 wallets and ownership transfer in

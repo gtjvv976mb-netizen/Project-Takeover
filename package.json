@@ -1,7 +1,7 @@
 {
   "name": "takeover",
   "version": "0.1.0",
-  "description": "Project: Takeover — an escrowed marketplace where independent Solana builders sell the projects, tokens and communities they shipped.",
+  "description": "Project: Takeover \u2014 an escrowed marketplace where independent Solana builders sell the projects, tokens and communities they shipped.",
   "license": "MIT",
   "engines": {
     "node": ">=22.13"
@@ -11,7 +11,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "program:build": "./scripts/build-program.sh",
+    "program:test": "tsx --test-concurrency=1 tests/escrow.test.ts && tsx --test-concurrency=1 tests/metadata.test.ts"
   },
   "dependencies": {
     "@solana/spl-token": "^0.4.15",
@@ -26,14 +28,18 @@
     "tweetnacl": "^1.0.3"
   },
   "devDependencies": {
+    "@coral-xyz/anchor": "^0.31.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^24.13.3",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "anchor-bankrun": "^0.5.0",
     "eslint": "^9",
     "eslint-config-next": "16.3.4",
     "playwright-core": "^1.63.0",
+    "solana-bankrun": "^0.4.0",
     "tailwindcss": "^4",
+    "tsx": "^4.23.13",
     "typescript": "^5"
   }
 }

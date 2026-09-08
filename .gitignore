@@ -44,3 +44,11 @@ next-env.d.ts
 # runtime data: sqlite db, escrow keypair, test keypairs, generated screenshots. NEVER commit.
 /data/
 /shots/
+
+# rust / anchor build output
+/target
+/.anchor
+test-ledger
+
+# Metaplex binary used only by the local test suite
+tests/fixtures/*.so
