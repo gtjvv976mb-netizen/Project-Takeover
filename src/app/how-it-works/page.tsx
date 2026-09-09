@@ -1,3 +1,5 @@
+"use client";
+import { useConfig } from "@/components/ConfigContext";
 import Link from "next/link";
 
 const FLOWS = [
@@ -36,6 +38,7 @@ const FLOWS = [
 ];
 
 export default function HowItWorks() {
+  const cfg = useConfig();
   return (
     <>
       <section className="border-b border-line">
@@ -85,7 +88,7 @@ export default function HowItWorks() {
           </p>
           <div className="mt-10 grid gap-px bg-surface/15 sm:grid-cols-3">
             {[
-              ["2%", "Platform fee, taken from the seller's payout only when a deal settles."],
+              [`${cfg.feeBps / 100}%`, "Platform fee, taken from the seller's payout only when a deal settles. The program refuses to go above 10%, whoever asks."],
               ["0", "Private keys ever changing hands on this site."],
               ["1 tx", "For a token handover: the buyer is paid out and the seller is paid in the same transaction."],
             ].map(([k, v]) => (
