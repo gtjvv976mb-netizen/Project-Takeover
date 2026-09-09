@@ -45,6 +45,9 @@ export interface TokenInfo {
     creator: string | null;
     complete: boolean | null;
   } | null;
+  description?: string;
+  /** Links the creator published in the token's own metadata. Public, self-declared. */
+  socials?: { twitter?: string; telegram?: string; website?: string };
   holders?: {
     top: { address: string; amount: string }[]; // largest token accounts (max 20)
     top10Share: number; // 0..1 share of supply held by the 10 largest accounts
@@ -104,6 +107,25 @@ export interface ListingEvent {
   kind: string;
   data: Record<string, unknown>;
   createdAt: number;
+}
+
+/** A token somebody wants to buy, whether or not its owner has ever visited the site. */
+export interface WantedEntry {
+  mint: string;
+  addedBy: string;
+  note: string;
+  /** Indicative, non-binding, in lamports. 0 means "no figure given". */
+  indicativeLamports: number;
+  createdAt: number;
+}
+
+export interface WantedRow {
+  mint: string;
+  token: TokenInfo | null;
+  interest: number;
+  topIndicativeLamports: number;
+  firstWantedAt: number;
+  entries: WantedEntry[];
 }
 
 export interface AppConfig {

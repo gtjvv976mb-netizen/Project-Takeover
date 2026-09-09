@@ -79,10 +79,19 @@ export async function fetchTokenInfo(mintStr: string): Promise<TokenInfo> {
     if (p.uri) {
       try {
         const res = await fetch(p.uri, { signal: AbortSignal.timeout(4000) });
-        const j = (await res.json()) as { image?: string; name?: string; symbol?: string };
+        const j = (await res.json()) as {
+          image?: string; name?: string; symbol?: string; description?: string;
+          twitter?: string; telegram?: string; website?: string;
+        };
         if (j.image) info.image = j.image;
         if (!info.name && j.name) info.name = j.name;
         if (!info.symbol && j.symbol) info.symbol = j.symbol;
+        if (j.description) info.description = j.description;
+        // Creators publish these themselves when they launch, so they are the honest
+        // way to reach a dev who never signed up here.
+        const link = (v?: string) => (v && /^https?:\/\//.test(v) ? v.slice(0, 300) : undefined);
+        const socials = { twitter: link(j.twitter), telegram: link(j.telegram), website: link(j.website) };
+        if (socials.twitter || socials.telegram || socials.website) info.socials = socials;
       } catch { /* off-chain metadata unreachable; fine */ }
     }
   }

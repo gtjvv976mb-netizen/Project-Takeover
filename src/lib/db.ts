@@ -1,6 +1,6 @@
 import path from "node:path";
 import fs from "node:fs";
-import type { BuilderProfile, BuilderStats, Listing, ListingEvent, ListingStatus } from "./types";
+import type { BuilderProfile, BuilderStats, Listing, ListingEvent, ListingStatus, TokenInfo, WantedEntry, WantedRow } from "./types";
 
 // node:sqlite is a Node 22.13+/24 built-in. We resolve it through
 // process.getBuiltinModule so the Next.js bundler leaves it alone.
@@ -51,6 +51,20 @@ function open() {
       created_at INTEGER NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_events_listing ON events(listing_id);
+    CREATE TABLE IF NOT EXISTS wanted (
+      mint TEXT NOT NULL,
+      added_by TEXT NOT NULL,
+      note TEXT NOT NULL DEFAULT '',
+      indicative_lamports INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      PRIMARY KEY (mint, added_by)
+    );
+    CREATE INDEX IF NOT EXISTS idx_wanted_mint ON wanted(mint);
+    CREATE TABLE IF NOT EXISTS token_cache (
+      mint TEXT PRIMARY KEY,
+      token_json TEXT NOT NULL,
+      fetched_at INTEGER NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS builders (
       wallet TEXT PRIMARY KEY,
       name TEXT NOT NULL DEFAULT '',
@@ -204,4 +218,57 @@ export function topBuilders(limit = 12): { wallet: string; profile: BuilderProfi
   const rows = db().prepare(`SELECT seller FROM listings WHERE status != 'draft' GROUP BY seller
     ORDER BY SUM(CASE WHEN status='sold' THEN 1 ELSE 0 END) DESC, COUNT(*) DESC LIMIT ?`).all(limit) as Row[];
   return rows.map((r) => ({ wallet: r.seller as string, profile: getBuilder(r.seller as string), stats: builderStats(r.seller as string) }));
+}
+
+/* ------------------------------------------------------------ wanted board */
+
+export function addWanted(e: WantedEntry) {
+  db().prepare(`INSERT INTO wanted (mint, added_by, note, indicative_lamports, created_at) VALUES (?,?,?,?,?)
+    ON CONFLICT(mint, added_by) DO UPDATE SET note=excluded.note, indicative_lamports=excluded.indicative_lamports`)
+    .run(e.mint, e.addedBy, e.note, e.indicativeLamports, e.createdAt);
+}
+
+export function removeWanted(mint: string, addedBy: string) {
+  db().prepare(`DELETE FROM wanted WHERE mint = ? AND added_by = ?`).run(mint, addedBy);
+}
+
+export function wantedFor(mint: string): WantedEntry[] {
+  return (db().prepare(`SELECT * FROM wanted WHERE mint = ? ORDER BY indicative_lamports DESC, created_at ASC`).all(mint) as Row[])
+    .map((r) => ({
+      mint: r.mint as string, addedBy: r.added_by as string, note: r.note as string,
+      indicativeLamports: Number(r.indicative_lamports), createdAt: Number(r.created_at),
+    }));
+}
+
+/** The board: every token somebody has asked for, most-wanted first. */
+export function wantedBoard(limit = 60): WantedRow[] {
+  const rows = db().prepare(`SELECT mint, COUNT(*) AS interest, MAX(indicative_lamports) AS top, MIN(created_at) AS first
+    FROM wanted GROUP BY mint ORDER BY interest DESC, top DESC LIMIT ?`).all(limit) as Row[];
+  return rows.map((r) => ({
+    mint: r.mint as string,
+    token: getCachedToken(r.mint as string),
+    interest: Number(r.interest),
+    topIndicativeLamports: Number(r.top ?? 0),
+    firstWantedAt: Number(r.first),
+    entries: [],
+  }));
+}
+
+/** Chain reads are slow and rate-limited, so a token's dossier is cached. */
+export function getCachedToken(mint: string, maxAgeMs = 10 * 60_000): TokenInfo | null {
+  const r = db().prepare(`SELECT token_json, fetched_at FROM token_cache WHERE mint = ?`).get(mint) as Row | undefined;
+  if (!r) return null;
+  if (Date.now() - Number(r.fetched_at) > maxAgeMs) return JSON.parse(r.token_json as string) as TokenInfo;
+  return JSON.parse(r.token_json as string) as TokenInfo;
+}
+
+export function cacheToken(mint: string, token: TokenInfo) {
+  db().prepare(`INSERT INTO token_cache (mint, token_json, fetched_at) VALUES (?,?,?)
+    ON CONFLICT(mint) DO UPDATE SET token_json=excluded.token_json, fetched_at=excluded.fetched_at`)
+    .run(mint, JSON.stringify(token), Date.now());
+}
+
+export function isTokenCacheFresh(mint: string, maxAgeMs = 10 * 60_000): boolean {
+  const r = db().prepare(`SELECT fetched_at FROM token_cache WHERE mint = ?`).get(mint) as Row | undefined;
+  return !!r && Date.now() - Number(r.fetched_at) <= maxAgeMs;
 }
