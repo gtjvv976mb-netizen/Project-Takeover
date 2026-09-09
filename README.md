@@ -46,6 +46,7 @@ polled every two seconds. Everything respects `prefers-reduced-motion`.
 | Program | [`B6sQ8s6rikSPqwPhm6XPpy16mVuJ87raCcVFXMA6sSVG`](https://explorer.solana.com/address/B6sQ8s6rikSPqwPhm6XPpy16mVuJ87raCcVFXMA6sSVG?cluster=devnet) |
 | Config account | `EsfWYLtLBDA9DxGfCMm6rrxRJ2SJ41xbRiPSmVMHonJV` |
 | Fee | 500 bps (5%), and the program refuses anything above 500 |
+| Instructions | listings, escrowed deals, and funded offers |
 
 Unaudited. Devnet only — do not point this at mainnet funds.
 
@@ -87,6 +88,7 @@ solana program deploy target/deploy/takeover_escrow.so \
 node scripts/init-program.mjs --fee-bps 200 # create the config account
 npm run program:test                        # 21 adversarial tests
 node scripts/e2e-program.mjs                # drives the real site against the program
+npm run e2e:offers                          # unsolicited funded offers, end to end
 ```
 
 Point the app at it with `RPC_URL` and `NEXT_PUBLIC_RPC_URL` in `.env.local`, and set
