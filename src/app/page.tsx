@@ -6,6 +6,7 @@ import { useCountUp, useReveal } from "@/lib/motion";
 import { formatSol, shortKey, TYPE_LABELS, type BuilderProfile, type BuilderStats, type Listing, type ListingType } from "@/lib/types";
 import { Button, ListingCard, Sigil, TYPE_SHORT, TYPE_TINT } from "@/components/ui";
 import { SlotHeight } from "@/components/SlotHeight";
+import { useConfig } from "@/components/ConfigContext";
 
 type Activity = { kind: string; at: number; id: string; title: string; priceLamports: number; type: Listing["type"] };
 const VERB: Record<string, string> = { created: "listed", escrowed: "went live", paid: "funded", settled: "sold", released: "sold" };
@@ -126,8 +127,8 @@ function Pitch() {
               Stop buying bags.<br />Buy the whole project.
             </h3>
             <p className="mt-2 text-[15px] leading-relaxed text-muted">
-              Make an offer on a memecoin and walk away owning it outright — the mint, the metadata,
-              the creator fees, the ticker. Not a position. The project.
+              Buy a memecoin outright and walk away owning it — the mint, the metadata, the creator
+              fees, the ticker. Not a position. The whole project.
             </p>
           </div>
         </div>
@@ -241,32 +242,161 @@ function Market({ listings, query, type, setType, status, setStatus, loading }: 
 
 /* ------------------------------------------------------------- how it works */
 
-const STEPS = [
-  { icon: "📦", title: "List what you built", body: "Connect your wallet. We read the blockchain to confirm you really own it, then you set a price." },
-  { icon: "🔒", title: "Buyer pays into escrow", body: "Their SOL is held safely. Nobody can touch it until the handover actually happens." },
-  { icon: "🤝", title: "Ownership transfers", body: "For tokens it is one automatic transaction. For everything else, funds release once the buyer confirms." },
+type Step = { title: string; body: string; note?: string };
+
+/**
+ * Written from the user's chair: what you click, what your wallet asks you to sign,
+ * and what you get. Where the two asset types genuinely diverge, the step says so
+ * rather than papering over it.
+ */
+const JOURNEYS: {
+  key: string;
+  tab: string;
+  who: string;
+  tint: string;
+  steps: Step[];
+  safety: string[];
+}[] = [
+  {
+    key: "sell",
+    tab: "I built something",
+    who: "Selling takes about five minutes.",
+    tint: "var(--color-tangerine)",
+    steps: [
+      {
+        title: "Connect your wallet",
+        body: "Nothing to sign up for and no password. Your wallet is your account, and it is also your proof — the site reads the chain to see what you actually control.",
+      },
+      {
+        title: "Say what you are selling",
+        body: "Paste your token's mint address, or describe the project, site or community. Add a name, a short description and links. Set your price in SOL.",
+        note: "For a token, the chain is checked right then. If your wallet does not hold those controls, the listing is refused. Nobody can list what they do not own.",
+      },
+      {
+        title: "Hand over the controls",
+        body: "Your wallet asks you to approve one transaction for each control you are selling. They move into the escrow program's custody, and your listing goes live.",
+        note: "Tokens only. If you are selling a pump.fun coin or a whole project, skip this — your listing is live immediately and you keep everything until someone pays.",
+      },
+      {
+        title: "Get paid",
+        body: "For a token, the moment someone buys, the SOL lands in your wallet automatically. For anything else, you hand it over, the buyer confirms, and you are paid.",
+      },
+    ],
+    safety: [
+      "Changed your mind? Cancel any time before it sells and every control comes straight back to you.",
+      "You are never left having handed something over with no payment. For tokens the swap is one transaction; for everything else the buyer's money is already locked up before you deliver.",
+    ],
+  },
+  {
+    key: "buy",
+    tab: "I want to take one over",
+    who: "Buying is two clicks and one signature.",
+    tint: "var(--color-brand)",
+    steps: [
+      {
+        title: "Browse and check the proof",
+        body: "Every listing shows what the chain says, not what the seller claims: total supply, which controls exist, who holds them, and how concentrated the top holders are.",
+      },
+      {
+        title: "Connect your wallet and hit buy",
+        body: "The price is fixed and shown up front. Your wallet shows you exactly what you are approving before you sign anything.",
+      },
+      {
+        title: "Get the keys",
+        body: "For a token, the same transaction that takes your SOL puts the mint, freeze and metadata controls in your wallet. You own it before the transaction finishes.",
+        note: "For a pump.fun coin or a project, your SOL goes into the escrow program instead. The seller cannot touch it. They then transfer ownership or hand over the repo, domain and socials.",
+      },
+      {
+        title: "Confirm and release",
+        body: "Once you have it, you release the funds to the seller. That last step is yours alone — no one else can do it for you.",
+        note: "Tokens skip this entirely. There is nothing to release, because you already have it.",
+      },
+    ],
+    safety: [
+      "If a seller takes your money and vanishes, you get it back. After the delivery deadline anyone can trigger the refund — you do not need the seller, or us, to cooperate.",
+      "Something off? Freeze the deal in dispute. The arbitrator can only pick you or the seller. It cannot redirect your money anywhere else.",
+    ],
+  },
 ];
 
-function HowItWorks() {
-  const ref = useReveal<HTMLDivElement>(0.12);
+function HowItWorks({ feeBps }: { feeBps: number }) {
+  const [key, setKey] = useState(JOURNEYS[0].key);
+  const ref = useReveal<HTMLDivElement>(0.06);
+  const j = JOURNEYS.find((x) => x.key === key) ?? JOURNEYS[0];
+
   return (
-    <section className="border-y border-line bg-surface">
+    <section id="how" className="scroll-mt-20 border-y border-line bg-surface">
       <div className="wrap py-16">
         <div className="mx-auto max-w-2xl text-center">
-          <h2 className="title-lg">Safe for both sides</h2>
-          <p className="lead mx-auto mt-3">Three steps, no trust required.</p>
+          <div className="kicker">Step by step</div>
+          <h2 className="title-lg mt-2">What actually happens</h2>
         </div>
-        <div ref={ref} data-reveal className="mt-10 grid gap-5 md:grid-cols-3">
-          {STEPS.map((s, i) => (
-            <div key={s.title} style={{ ["--i" as string]: i }} className="rounded-2xl bg-bg p-6">
-              <div className="grid h-12 w-12 place-items-center rounded-xl bg-surface text-[22px] shadow-[var(--shadow-card)]" aria-hidden>{s.icon}</div>
-              <h3 className="mt-4 text-[18px] font-bold text-ink">{s.title}</h3>
-              <p className="mt-2 text-[15px] leading-relaxed text-muted">{s.body}</p>
+
+        <div className="mt-7 flex justify-center">
+          <div className="flex flex-wrap justify-center gap-1 rounded-2xl border border-line bg-bg p-1">
+            {JOURNEYS.map((x) => (
+              <button
+                key={x.key}
+                onClick={() => setKey(x.key)}
+                aria-pressed={x.key === key}
+                className={`rounded-xl px-4 py-2 text-[14px] font-semibold transition-colors ${
+                  x.key === key ? "text-white" : "text-muted hover:text-ink"
+                }`}
+                style={x.key === key ? { background: x.tint } : undefined}
+              >
+                {x.tab}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <p className="mt-4 text-center text-[15px] text-muted">{j.who}</p>
+
+        <div key={j.key} ref={ref} data-reveal className="mx-auto mt-10 grid max-w-5xl gap-4 md:grid-cols-2">
+          {j.steps.map((step, i) => (
+            <div
+              key={step.title}
+              style={{ ["--i" as string]: i }}
+              className="flex gap-4 rounded-2xl border border-line bg-bg p-5"
+            >
+              <span
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-[15px] font-bold text-white"
+                style={{ background: j.tint }}
+                aria-hidden
+              >
+                {i + 1}
+              </span>
+              <div className="min-w-0">
+                <h3 className="text-[17px] font-bold leading-snug text-ink">{step.title}</h3>
+                <p className="mt-1.5 text-[14px] leading-relaxed text-muted">{step.body}</p>
+                {step.note && (
+                  <p className="mt-2.5 border-l-2 pl-3 text-[13px] leading-relaxed text-faint" style={{ borderColor: j.tint }}>
+                    {step.note}
+                  </p>
+                )}
+              </div>
             </div>
           ))}
         </div>
+
+        <div className="mx-auto mt-8 max-w-5xl rounded-2xl border border-line bg-bg p-6">
+          <div className="kicker mb-3">If it goes wrong</div>
+          <ul className="grid gap-2.5 md:grid-cols-2">
+            {j.safety.map((line) => (
+              <li key={line} className="flex gap-2.5 text-[14px] leading-relaxed text-muted">
+                <span aria-hidden style={{ color: "var(--color-green)" }}>✓</span>
+                <span>{line}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-4 border-t border-line pt-4 text-[13px] text-faint">
+            The fee is {feeBps / 100}%, taken from the seller only when a sale completes. Buyers pay
+            nothing beyond Solana&apos;s own network fee, a fraction of a cent.
+          </p>
+        </div>
+
         <div className="mt-8 text-center">
-          <Link href="/how-it-works"><Button variant="secondary">Read the details</Button></Link>
+          <Link href="/how-it-works"><Button variant="secondary">The long version</Button></Link>
         </div>
       </div>
     </section>
@@ -302,6 +432,7 @@ function Builders({ builders }: { builders: { wallet: string; profile: BuilderPr
 /* --------------------------------------------------------------------- page */
 
 export default function Home() {
+  const cfg = useConfig();
   const [listings, setListings] = useState<Listing[] | null>(null);
   const [builders, setBuilders] = useState<{ wallet: string; profile: BuilderProfile | null; stats: BuilderStats }[]>([]);
   const [activity, setActivity] = useState<Activity[]>([]);
@@ -357,7 +488,7 @@ export default function Home() {
       <Pitch />
       <Categories counts={counts} onPick={jumpTo} />
       <Market listings={all} query={query} type={type} setType={setType} status={status} setStatus={setStatus} loading={listings === null} />
-      <HowItWorks />
+      <HowItWorks feeBps={cfg.feeBps} />
       <Builders builders={builders} />
     </>
   );
