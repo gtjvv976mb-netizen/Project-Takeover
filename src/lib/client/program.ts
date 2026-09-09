@@ -10,7 +10,7 @@ import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import type { WalletContextState } from "@solana/wallet-adapter-react";
 import {
   AUTH_BIT, IDL, KIND_ARG, METADATA_PROGRAM_ID, authoritiesToBits, configPda, listingIdBytes,
-  listingPda, metadataPda,
+  listingPda, metadataPda, offerPda,
 } from "@/lib/program";
 import type { AuthorityKind, ListingType } from "@/lib/types";
 
@@ -188,5 +188,77 @@ export async function cancelOnChain(
       tokenMetadataProgram: mint && opts.includesMetadata ? METADATA_PROGRAM_ID : null,
       tokenProgram: mint ? TOKEN_PROGRAM_ID : null,
     }))
+    .rpc();
+}
+
+/* ------------------------------------------------------------------ offers */
+
+/**
+ * Bid on a token nobody has listed. The SOL locks in a program account immediately, so
+ * the bid is a checkable commitment rather than a message someone can ignore or doubt.
+ */
+export async function makeOfferOnChain(
+  connection: Connection,
+  wallet: WalletContextState,
+  opts: { id: string; mint: string; priceLamports: number; authorities: AuthorityKind[]; expiryDays?: number },
+): Promise<string> {
+  const program = programFor(connection, wallet);
+  const buyer = wallet.publicKey!;
+  return program.methods
+    .makeOffer(
+      Array.from(listingIdBytes(opts.id)),
+      new BN(opts.priceLamports),
+      authoritiesToBits(opts.authorities),
+      opts.expiryDays ?? 14,
+    )
+    .accountsPartial(accts({
+      config: configPda(),
+      offer: offerPda(buyer, opts.id),
+      buyer,
+      mint: new PublicKey(opts.mint),
+      systemProgram: SystemProgram.programId,
+    }))
+    .rpc();
+}
+
+/**
+ * Take a funded offer. Signed by whoever actually holds the authorities — the token
+ * program verifies that, so a pretender's transaction simply fails.
+ */
+export async function acceptOfferOnChain(
+  connection: Connection,
+  wallet: WalletContextState,
+  opts: { id: string; buyer: string; treasury: string; mint: string; includesMetadata: boolean },
+): Promise<string> {
+  const program = programFor(connection, wallet);
+  const buyer = new PublicKey(opts.buyer);
+  const mint = new PublicKey(opts.mint);
+  return program.methods
+    .acceptOffer()
+    .accountsPartial(accts({
+      config: configPda(),
+      offer: offerPda(buyer, opts.id),
+      seller: wallet.publicKey!,
+      buyer,
+      treasury: new PublicKey(opts.treasury),
+      mint,
+      metadata: opts.includesMetadata ? metadataPda(mint) : null,
+      tokenMetadataProgram: opts.includesMetadata ? METADATA_PROGRAM_ID : null,
+      tokenProgram: TOKEN_PROGRAM_ID,
+    }))
+    .rpc();
+}
+
+/** Withdraw a bid. The buyer any time; anyone else once it has expired. */
+export async function cancelOfferOnChain(
+  connection: Connection,
+  wallet: WalletContextState,
+  opts: { id: string; buyer: string },
+): Promise<string> {
+  const program = programFor(connection, wallet);
+  const buyer = new PublicKey(opts.buyer);
+  return program.methods
+    .cancelOffer()
+    .accountsPartial(accts({ offer: offerPda(buyer, opts.id), signer: wallet.publicKey!, buyer }))
     .rpc();
 }

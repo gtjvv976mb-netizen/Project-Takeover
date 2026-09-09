@@ -1,9 +1,10 @@
 "use client";
 import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useWallet } from "@solana/wallet-adapter-react";
+import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { signedPost } from "@/lib/client/api";
-import { formatSol, shortKey, type Listing, type TokenInfo, type WantedEntry } from "@/lib/types";
+import { acceptOfferOnChain, cancelOfferOnChain, makeOfferOnChain } from "@/lib/client/program";
+import { formatSol, shortKey, type AuthorityKind, type Listing, type TokenInfo, type WantedEntry } from "@/lib/types";
 import { Alert, Button, Chip, Field, inputCls, ListingCard, Sigil, TokenAvatar } from "@/components/ui";
 import { CoverArt } from "@/components/CoverArt";
 import { explorerUrl, useConfig } from "@/components/ConfigContext";
@@ -27,9 +28,20 @@ function Fact({ label, value, tone }: { label: string; value: React.ReactNode; t
   );
 }
 
+type Offer = {
+  account: string; buyer: string; mint: string; id: string;
+  priceLamports: number; escrowedLamports: number; expiry: number;
+  authorities: AuthorityKind[]; status: string;
+};
+
+const AUTH_LABEL: Record<AuthorityKind, string> = {
+  mint: "mint", freeze: "freeze", metadata_update: "metadata",
+};
+
 export default function TokenPage({ params }: { params: Promise<{ mint: string }> }) {
   const { mint } = use(params);
   const wallet = useWallet();
+  const { connection } = useConnection();
   const cfg = useConfig();
   const me = wallet.publicKey?.toBase58();
 
@@ -38,12 +50,21 @@ export default function TokenPage({ params }: { params: Promise<{ mint: string }
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
   const [price, setPrice] = useState("");
+  const [offers, setOffers] = useState<Offer[] | null>(null);
+  const [bid, setBid] = useState("");
+  const [bidAuths, setBidAuths] = useState<AuthorityKind[]>(["mint", "metadata_update"]);
 
   const load = useCallback(async () => {
     const r = await fetch(`/api/token/${mint}`);
     const j = await r.json();
     if (!r.ok) throw new Error(j.error ?? "Could not read that token");
     setD(j);
+    // Offers come straight from the chain, so the page never shows a bid that is not
+    // really there to be taken.
+    try {
+      const o = await fetch(`/api/offers?mint=${mint}`).then((x) => x.json());
+      setOffers(Array.isArray(o) ? o : []);
+    } catch { setOffers([]); }
   }, [mint]);
 
   useEffect(() => {
@@ -52,6 +73,32 @@ export default function TokenPage({ params }: { params: Promise<{ mint: string }
     load().catch((e) => { if (!off) setError((e as Error).message); });
     return () => { off = true; };
   }, [load]);
+
+  async function run(fn: () => Promise<unknown>) {
+    setBusy(true); setError(null);
+    try { await fn(); await load(); }
+    catch (e) { setError((e as Error).message); }
+    finally { setBusy(false); }
+  }
+
+  const placeBid = () => run(async () => {
+    const lamports = Math.round(Number(bid) * 1e9);
+    if (!Number.isFinite(lamports) || lamports <= 0) throw new Error("Enter an amount in SOL");
+    if (!bidAuths.length) throw new Error("Pick at least one control to bid for");
+    await makeOfferOnChain(connection, wallet, {
+      id: `${Date.now().toString(36)}${Math.floor(performance.now()).toString(36)}`.slice(0, 15),
+      mint, priceLamports: lamports, authorities: bidAuths, expiryDays: 14,
+    });
+    setBid("");
+  });
+
+  const acceptBid = (o: Offer) => run(() =>
+    acceptOfferOnChain(connection, wallet, {
+      id: o.id, buyer: o.buyer, treasury: cfg.treasury, mint,
+      includesMetadata: o.authorities.includes("metadata_update"),
+    }));
+
+  const withdrawBid = (o: Offer) => run(() => cancelOfferOnChain(connection, wallet, { id: o.id, buyer: o.buyer }));
 
   async function want(remove = false) {
     setBusy(true); setError(null);
@@ -115,7 +162,55 @@ export default function TokenPage({ params }: { params: Promise<{ mint: string }
         )}
 
         <section>
-          <h2 className="mb-1 text-[20px] font-bold text-ink">Who wants it ({d.wanted.length})</h2>
+          <div className="flex flex-wrap items-baseline gap-3">
+            <h2 className="text-[20px] font-bold text-ink">Funded offers</h2>
+            {offers && offers.length > 0 && (
+              <span className="pill" style={{ ["--tint" as string]: "var(--color-green)" }}>
+                {formatSol(offers.reduce((a, o) => a + o.escrowedLamports, 0))} SOL locked
+              </span>
+            )}
+          </div>
+          <p className="mb-4 mt-1 text-[14px] text-muted">
+            Real SOL, already locked on chain. If you hold the controls, accepting pays you instantly.
+          </p>
+
+          {offers === null ? (
+            <div className="skeleton h-20" />
+          ) : offers.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-line p-8 text-center text-[15px] text-muted">
+              No funded offers yet.
+            </div>
+          ) : (
+            <ul className="space-y-2">
+              {offers.map((o) => {
+                const mineBid = o.buyer === me;
+                return (
+                  <li key={o.account} className="flex flex-wrap items-center gap-3 rounded-2xl border border-line bg-surface p-4">
+                    <Sigil wallet={o.buyer} size={32} />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-baseline gap-2">
+                        <span className="text-[20px] font-bold text-ink">{formatSol(o.priceLamports)} SOL</span>
+                        <span className="text-[13px] text-muted">from {shortKey(o.buyer, 4)}{mineBid && " (you)"}</span>
+                      </div>
+                      <div className="mt-1 flex flex-wrap gap-1.5">
+                        {o.authorities.map((a) => <Chip key={a}>{AUTH_LABEL[a]}</Chip>)}
+                        <Chip tint="var(--color-faint)">expires {new Date(o.expiry * 1000).toLocaleDateString()}</Chip>
+                      </div>
+                    </div>
+                    {me && (mineBid ? (
+                      <Button variant="secondary" onClick={() => withdrawBid(o)} disabled={busy}>Withdraw</Button>
+                    ) : (
+                      <Button onClick={() => acceptBid(o)} disabled={busy}>Accept &amp; get paid</Button>
+                    ))}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+
+        <section>
+          <h2 className="mb-1 text-[20px] font-bold text-ink">Also interested ({d.wanted.length})</h2>
           <p className="mb-4 text-[14px] text-muted">
             Interest registered here is a signal, not a commitment. Nobody&apos;s money is locked.
           </p>
@@ -178,6 +273,42 @@ export default function TokenPage({ params }: { params: Promise<{ mint: string }
               </div>
             )}
             {error && <div className="mt-3"><Alert kind="error">{error}</Alert></div>}
+          </div>
+        )}
+
+        {me && !d.forSale && (
+          <div className="card p-5">
+            <div className="kicker">Put money behind it</div>
+            <h2 className="mt-1 text-[19px] font-bold text-ink">Make a funded offer</h2>
+            <p className="mt-1.5 text-[14px] leading-relaxed text-muted">
+              Your SOL locks on chain for 14 days. Only someone who genuinely holds these controls can
+              take it, and you can withdraw any time before they do.
+            </p>
+            <div className="mt-4 space-y-3">
+              <Field label="Your offer in SOL">
+                <input className={inputCls} type="number" min="0.01" step="0.1" placeholder="e.g. 8"
+                  value={bid} onChange={(e) => setBid(e.target.value)} />
+              </Field>
+              <div>
+                <div className="mb-1.5 text-[14px] font-semibold text-ink">What you want</div>
+                <div className="flex flex-wrap gap-2">
+                  {(["mint", "freeze", "metadata_update"] as AuthorityKind[]).map((a) => {
+                    const on = bidAuths.includes(a);
+                    return (
+                      <button key={a} type="button"
+                        onClick={() => setBidAuths(on ? bidAuths.filter((x) => x !== a) : [...bidAuths, a])}
+                        className={`rounded-full border px-3 py-1.5 text-[13px] font-semibold transition-colors ${
+                          on ? "border-brand bg-brand text-white" : "border-line text-muted hover:text-ink"}`}>
+                        {AUTH_LABEL[a]}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <Button className="w-full" onClick={placeBid} disabled={busy || !bid}>
+                {busy ? "Signing…" : "Lock the offer on chain"}
+              </Button>
+            </div>
           </div>
         )}
 

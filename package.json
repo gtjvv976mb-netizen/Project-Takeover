@@ -13,7 +13,7 @@
     "start": "next start -p ${PORT:-3000}",
     "lint": "eslint",
     "program:build": "./scripts/build-program.sh",
-    "program:test": "tsx --test-concurrency=1 tests/escrow.test.ts && tsx --test-concurrency=1 tests/metadata.test.ts"
+    "program:test": "tsx --test-concurrency=1 tests/escrow.test.ts && tsx --test-concurrency=1 tests/metadata.test.ts && tsx --test-concurrency=1 tests/offers.test.ts"
   },
   "dependencies": {
     "@solana/spl-token": "^0.4.15",

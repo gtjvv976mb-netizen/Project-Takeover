@@ -324,6 +324,108 @@ pub mod takeover_escrow {
         Ok(())
     }
 
+    /// Bid on a token nobody has listed.
+    ///
+    /// The buyer's SOL locks in this account. It is a real, checkable commitment rather
+    /// than a message: anyone reading the chain can see the money is there.
+    pub fn make_offer(
+        ctx: Context<MakeOffer>,
+        offer_id: [u8; 16],
+        price: u64,
+        authorities: u8,
+        expiry_days: u16,
+    ) -> Result<()> {
+        require!(price > 0, EscrowError::ZeroPrice);
+        require!(authorities & AUTH_ALL != 0, EscrowError::NoAuthorities);
+        require!(
+            (MIN_DELIVERY_DAYS..=MAX_DELIVERY_DAYS).contains(&expiry_days),
+            EscrowError::BadOfferWindow
+        );
+
+        let now = Clock::get()?.unix_timestamp;
+        let o = &mut ctx.accounts.offer;
+        o.buyer = ctx.accounts.buyer.key();
+        o.mint = ctx.accounts.mint.key();
+        o.offer_id = offer_id;
+        o.price = price;
+        o.fee_bps = ctx.accounts.config.fee_bps;
+        o.escrowed_lamports = price;
+        o.expiry = now
+            .checked_add((expiry_days as i64).checked_mul(SECONDS_PER_DAY).ok_or(EscrowError::MathOverflow)?)
+            .ok_or(EscrowError::MathOverflow)?;
+        o.authorities = authorities & AUTH_ALL;
+        o.status = OfferStatus::Open;
+        o.bump = ctx.bumps.offer;
+
+        pay_from_signer(
+            &ctx.accounts.buyer,
+            &ctx.accounts.offer.to_account_info(),
+            &ctx.accounts.system_program,
+            price,
+        )
+    }
+
+    /// Take a funded offer. Signed by whoever currently holds the authorities.
+    ///
+    /// One instruction: every authority moves to the buyer and the money moves to the
+    /// seller. Because the seller signs this themselves, the program never needs custody
+    /// of the token — and the token program rejects the whole thing if the signer is not
+    /// really the authority, so no separate ownership check is needed or trusted.
+    pub fn accept_offer(ctx: Context<AcceptOffer>) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let (seller_take, fee, wanted) = {
+            let o = &ctx.accounts.offer;
+            require!(o.status == OfferStatus::Open, EscrowError::OfferNotOpen);
+            require!(now < o.expiry, EscrowError::OfferExpired);
+            require_keys_eq!(o.mint, ctx.accounts.mint.key(), EscrowError::MintMismatch);
+            require_keys_eq!(o.buyer, ctx.accounts.buyer.key(), EscrowError::NotBuyer);
+            require_keys_neq!(o.buyer, ctx.accounts.seller.key(), EscrowError::SelfAccept);
+            require_keys_eq!(ctx.accounts.config.treasury, ctx.accounts.treasury.key(), EscrowError::BadTreasury);
+            (o.seller_take()?, o.fee()?, o.authorities)
+        };
+
+        // hand the controls over first; if any of this fails nothing is paid
+        transfer_authorities_from_signer(
+            wanted,
+            &ctx.accounts.seller,
+            &ctx.accounts.mint,
+            ctx.accounts.metadata.as_ref(),
+            &ctx.accounts.buyer.key(),
+            &ctx.accounts.token_program,
+        )?;
+
+        let offer_ai = ctx.accounts.offer.to_account_info();
+        pay_from_listing(&offer_ai, &ctx.accounts.seller.to_account_info(), seller_take)?;
+        pay_from_listing(&offer_ai, &ctx.accounts.treasury, fee)?;
+
+        let o = &mut ctx.accounts.offer;
+        o.escrowed_lamports = 0;
+        o.status = OfferStatus::Accepted;
+        Ok(())
+    }
+
+    /// Withdraw an offer and take the money back. The buyer may do this at any time;
+    /// anyone may do it once the offer has expired, so stale bids cannot linger.
+    pub fn cancel_offer(ctx: Context<CancelOffer>) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let held = {
+            let o = &ctx.accounts.offer;
+            require!(o.status == OfferStatus::Open, EscrowError::OfferNotOpen);
+            require_keys_eq!(o.buyer, ctx.accounts.buyer.key(), EscrowError::NotOfferBuyer);
+            if ctx.accounts.signer.key() != o.buyer {
+                require!(now >= o.expiry, EscrowError::OfferNotExpired);
+            }
+            o.escrowed_lamports
+        };
+
+        pay_from_listing(&ctx.accounts.offer.to_account_info(), &ctx.accounts.buyer, held)?;
+
+        let o = &mut ctx.accounts.offer;
+        o.escrowed_lamports = 0;
+        o.status = OfferStatus::Cancelled;
+        Ok(())
+    }
+
     /// Reclaim the rent from a finished listing. Only the seller, only once terminal.
     pub fn close_listing(ctx: Context<CloseListing>) -> Result<()> {
         let l = &ctx.accounts.listing;
@@ -440,6 +542,46 @@ fn transfer_authorities<'info>(
             &update_metadata_authority_ix(md.key, listing.key, new_authority),
             &[md.clone(), listing.clone(), md_program.clone()],
             signer_seeds,
+        )?;
+    }
+    Ok(())
+}
+
+/// Move authorities from the signing holder straight to `new_authority`.
+///
+/// No PDA custody: the seller signs, so the token program and Metaplex each verify the
+/// signer really is the current authority. If they are not, the CPI fails and the whole
+/// instruction reverts — including the payment.
+fn transfer_authorities_from_signer<'info>(
+    wanted: u8,
+    seller: &Signer<'info>,
+    mint: &Account<'info, Mint>,
+    metadata: Option<&AccountInfo<'info>>,
+    new_authority: &Pubkey,
+    token_program: &Program<'info, Token>,
+) -> Result<()> {
+    for (flag, ty) in [(AUTH_MINT, AuthorityType::MintTokens), (AUTH_FREEZE, AuthorityType::FreezeAccount)] {
+        if wanted & flag != 0 {
+            token::set_authority(
+                CpiContext::new(
+                    token_program.to_account_info(),
+                    SetAuthority {
+                        current_authority: seller.to_account_info(),
+                        account_or_mint: mint.to_account_info(),
+                    },
+                ),
+                ty,
+                Some(*new_authority),
+            )?;
+        }
+    }
+
+    if wanted & AUTH_METADATA != 0 {
+        let md = metadata.ok_or(EscrowError::BadMetadataAccount)?;
+        verify_metadata_pda(md.key, &mint.key())?;
+        invoke(
+            &update_metadata_authority_ix(md.key, seller.key, new_authority),
+            &[md.clone(), seller.to_account_info()],
         )?;
     }
     Ok(())
@@ -602,6 +744,61 @@ pub struct Cancel<'info> {
     #[account(address = METADATA_PROGRAM_ID @ EscrowError::BadMetadataAccount)]
     pub token_metadata_program: Option<AccountInfo<'info>>,
     pub token_program: Option<Program<'info, Token>>,
+}
+
+#[derive(Accounts)]
+#[instruction(offer_id: [u8; 16])]
+pub struct MakeOffer<'info> {
+    #[account(seeds = [b"config"], bump = config.bump)]
+    pub config: Account<'info, Config>,
+    #[account(
+        init,
+        payer = buyer,
+        space = Offer::SPACE,
+        seeds = [b"offer", buyer.key().as_ref(), offer_id.as_ref()],
+        bump
+    )]
+    pub offer: Account<'info, Offer>,
+    #[account(mut)]
+    pub buyer: Signer<'info>,
+    pub mint: Account<'info, Mint>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct AcceptOffer<'info> {
+    #[account(seeds = [b"config"], bump = config.bump)]
+    pub config: Account<'info, Config>,
+    #[account(mut, seeds = [b"offer", offer.buyer.as_ref(), offer.offer_id.as_ref()], bump = offer.bump)]
+    pub offer: Account<'info, Offer>,
+    /// Whoever currently holds the authorities. Verified by the token program itself.
+    #[account(mut)]
+    pub seller: Signer<'info>,
+    /// CHECK: matched against offer.buyer; receives the authorities.
+    #[account(mut)]
+    pub buyer: AccountInfo<'info>,
+    /// CHECK: matched against config.treasury.
+    #[account(mut)]
+    pub treasury: AccountInfo<'info>,
+    #[account(mut)]
+    pub mint: Account<'info, Mint>,
+    /// CHECK: verified against the canonical Metaplex PDA for this mint.
+    #[account(mut)]
+    pub metadata: Option<AccountInfo<'info>>,
+    /// CHECK: only used when a metadata authority is part of the offer.
+    pub token_metadata_program: Option<AccountInfo<'info>>,
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct CancelOffer<'info> {
+    #[account(mut, seeds = [b"offer", offer.buyer.as_ref(), offer.offer_id.as_ref()], bump = offer.bump)]
+    pub offer: Account<'info, Offer>,
+    /// The buyer, or after expiry anybody at all.
+    pub signer: Signer<'info>,
+    /// CHECK: matched against offer.buyer; the money goes back here.
+    #[account(mut)]
+    pub buyer: AccountInfo<'info>,
 }
 
 #[derive(Accounts)]

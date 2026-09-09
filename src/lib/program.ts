@@ -86,6 +86,19 @@ export function listingPda(seller: PublicKey, id: string): PublicKey {
   )[0];
 }
 
+export function offerPda(buyer: PublicKey, id: string): PublicKey {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("offer"), buyer.toBuffer(), Buffer.from(listingIdBytes(id))],
+    PROGRAM_ID,
+  )[0];
+}
+
+/** The program's OfferStatus, normalised the way statusFromAccount handles Status. */
+export function offerStatusFrom(s: Record<string, unknown>): "open" | "accepted" | "cancelled" {
+  const k = (Object.keys(s)[0] ?? "").toLowerCase();
+  return k === "accepted" ? "accepted" : k === "cancelled" ? "cancelled" : "open";
+}
+
 export const METADATA_PROGRAM_ID = new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
 
 export function metadataPda(mint: PublicKey): PublicKey {

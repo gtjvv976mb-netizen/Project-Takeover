@@ -8,6 +8,109 @@
   },
   "instructions": [
     {
+      "name": "accept_offer",
+      "docs": [
+        "Take a funded offer. Signed by whoever currently holds the authorities.",
+        "",
+        "One instruction: every authority moves to the buyer and the money moves to the",
+        "seller. Because the seller signs this themselves, the program never needs custody",
+        "of the token — and the token program rejects the whole thing if the signer is not",
+        "really the authority, so no separate ownership check is needed or trusted."
+      ],
+      "discriminator": [
+        227,
+        82,
+        234,
+        131,
+        1,
+        18,
+        48,
+        2
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "offer",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "offer.buyer",
+                "account": "Offer"
+              },
+              {
+                "kind": "account",
+                "path": "offer.offer_id",
+                "account": "Offer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "seller",
+          "docs": [
+            "Whoever currently holds the authorities. Verified by the token program itself."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "buyer",
+          "writable": true
+        },
+        {
+          "name": "treasury",
+          "writable": true
+        },
+        {
+          "name": "mint",
+          "writable": true
+        },
+        {
+          "name": "metadata",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "token_metadata_program",
+          "optional": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "buy_token",
       "docs": [
         "Buy a token listing. Pays the seller and the treasury, and transfers every",
@@ -181,6 +284,65 @@
           "name": "token_program",
           "optional": true,
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "cancel_offer",
+      "docs": [
+        "Withdraw an offer and take the money back. The buyer may do this at any time;",
+        "anyone may do it once the offer has expired, so stale bids cannot linger."
+      ],
+      "discriminator": [
+        92,
+        203,
+        223,
+        40,
+        92,
+        89,
+        53,
+        119
+      ],
+      "accounts": [
+        {
+          "name": "offer",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "offer.buyer",
+                "account": "Offer"
+              },
+              {
+                "kind": "account",
+                "path": "offer.offer_id",
+                "account": "Offer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "signer",
+          "docs": [
+            "The buyer, or after expiry anybody at all."
+          ],
+          "signer": true
+        },
+        {
+          "name": "buyer",
+          "writable": true
         }
       ],
       "args": []
@@ -606,6 +768,106 @@
       ]
     },
     {
+      "name": "make_offer",
+      "docs": [
+        "Bid on a token nobody has listed.",
+        "",
+        "The buyer's SOL locks in this account. It is a real, checkable commitment rather",
+        "than a message: anyone reading the chain can see the money is there."
+      ],
+      "discriminator": [
+        214,
+        98,
+        97,
+        35,
+        59,
+        12,
+        44,
+        178
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "offer",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "buyer"
+              },
+              {
+                "kind": "arg",
+                "path": "offer_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "buyer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "offer_id",
+          "type": {
+            "array": [
+              "u8",
+              16
+            ]
+          }
+        },
+        {
+          "name": "price",
+          "type": "u64"
+        },
+        {
+          "name": "authorities",
+          "type": "u8"
+        },
+        {
+          "name": "expiry_days",
+          "type": "u16"
+        }
+      ]
+    },
+    {
       "name": "refund",
       "docs": [
         "Return the escrowed money to the buyer. Callable by ANYONE once the deadline has",
@@ -956,6 +1218,19 @@
         26,
         58
       ]
+    },
+    {
+      "name": "Offer",
+      "discriminator": [
+        215,
+        88,
+        60,
+        71,
+        170,
+        162,
+        73,
+        229
+      ]
     }
   ],
   "errors": [
@@ -1073,6 +1348,36 @@
       "code": 6022,
       "name": "ListingStillLive",
       "msg": "Cannot close a listing that is still live"
+    },
+    {
+      "code": 6023,
+      "name": "OfferNotOpen",
+      "msg": "This offer is no longer open"
+    },
+    {
+      "code": 6024,
+      "name": "OfferExpired",
+      "msg": "This offer has expired"
+    },
+    {
+      "code": 6025,
+      "name": "OfferNotExpired",
+      "msg": "This offer has not expired yet"
+    },
+    {
+      "code": 6026,
+      "name": "NotOfferBuyer",
+      "msg": "Only the buyer may withdraw their own offer"
+    },
+    {
+      "code": 6027,
+      "name": "SelfAccept",
+      "msg": "A buyer cannot accept their own offer"
+    },
+    {
+      "code": 6028,
+      "name": "BadOfferWindow",
+      "msg": "Offer must last between 1 and 90 days"
     }
   ],
   "types": [
@@ -1230,6 +1535,106 @@
           {
             "name": "bump",
             "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Offer",
+      "docs": [
+        "An unsolicited, funded bid on a token nobody has listed.",
+        "",
+        "The mirror image of a `Listing`: instead of the seller escrowing the asset and",
+        "waiting for money, the buyer escrows the money and waits for the asset. Whoever",
+        "actually holds the authorities can accept, and because they sign that transaction",
+        "themselves the authorities move straight to the buyer — this account never needs",
+        "custody of them.",
+        "",
+        "The owner does not need an account here, or to have heard of this marketplace."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "buyer",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "offer_id",
+            "docs": [
+              "Client-chosen id, part of this account's address."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                16
+              ]
+            }
+          },
+          {
+            "name": "price",
+            "type": "u64"
+          },
+          {
+            "name": "fee_bps",
+            "docs": [
+              "Frozen when the offer is made, so a fee change cannot be applied to a live bid."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "escrowed_lamports",
+            "docs": [
+              "Lamports of the buyer's money this account holds, excluding rent."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "expiry",
+            "docs": [
+              "Unix timestamp after which anyone may clean this up and return the money."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "authorities",
+            "docs": [
+              "Which authorities the buyer is bidding for."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "status",
+            "type": {
+              "defined": {
+                "name": "OfferStatus"
+              }
+            }
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "OfferStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Open"
+          },
+          {
+            "name": "Accepted"
+          },
+          {
+            "name": "Cancelled"
           }
         ]
       }

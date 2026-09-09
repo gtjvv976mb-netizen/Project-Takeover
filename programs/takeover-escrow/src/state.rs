@@ -94,3 +94,59 @@ impl Listing {
             .ok_or(crate::EscrowError::MathOverflow.into())
     }
 }
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, Debug)]
+pub enum OfferStatus {
+    /// Funded and waiting. The buyer's SOL is held by this account.
+    Open,
+    /// Someone who held the authorities took it.
+    Accepted,
+    /// Withdrawn, or cleaned up after expiry. The money went back to the buyer.
+    Cancelled,
+}
+
+/// An unsolicited, funded bid on a token nobody has listed.
+///
+/// The mirror image of a `Listing`: instead of the seller escrowing the asset and
+/// waiting for money, the buyer escrows the money and waits for the asset. Whoever
+/// actually holds the authorities can accept, and because they sign that transaction
+/// themselves the authorities move straight to the buyer — this account never needs
+/// custody of them.
+///
+/// The owner does not need an account here, or to have heard of this marketplace.
+#[account]
+pub struct Offer {
+    pub buyer: Pubkey,
+    pub mint: Pubkey,
+    /// Client-chosen id, part of this account's address.
+    pub offer_id: [u8; 16],
+    pub price: u64,
+    /// Frozen when the offer is made, so a fee change cannot be applied to a live bid.
+    pub fee_bps: u16,
+    /// Lamports of the buyer's money this account holds, excluding rent.
+    pub escrowed_lamports: u64,
+    /// Unix timestamp after which anyone may clean this up and return the money.
+    pub expiry: i64,
+    /// Which authorities the buyer is bidding for.
+    pub authorities: u8,
+    pub status: OfferStatus,
+    pub bump: u8,
+}
+
+impl Offer {
+    pub const SPACE: usize = 8 + 32 + 32 + 16 + 8 + 2 + 8 + 8 + 1 + 1 + 1 + 16;
+
+    pub fn fee(&self) -> Result<u64> {
+        Ok(self
+            .price
+            .checked_mul(self.fee_bps as u64)
+            .ok_or(crate::EscrowError::MathOverflow)?
+            / 10_000)
+    }
+
+    pub fn seller_take(&self) -> Result<u64> {
+        self.price
+            .checked_sub(self.fee()?)
+            .ok_or(crate::EscrowError::MathOverflow.into())
+    }
+}

@@ -48,4 +48,16 @@ pub enum EscrowError {
     EscrowBalanceMismatch,
     #[msg("Cannot close a listing that is still live")]
     ListingStillLive,
+    #[msg("This offer is no longer open")]
+    OfferNotOpen,
+    #[msg("This offer has expired")]
+    OfferExpired,
+    #[msg("This offer has not expired yet")]
+    OfferNotExpired,
+    #[msg("Only the buyer may withdraw their own offer")]
+    NotOfferBuyer,
+    #[msg("A buyer cannot accept their own offer")]
+    SelfAccept,
+    #[msg("Offer must last between 1 and 90 days")]
+    BadOfferWindow,
 }
