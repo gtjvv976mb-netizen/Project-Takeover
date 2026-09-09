@@ -10,7 +10,7 @@ import {
 import { getMint, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID } from "@solana/spl-token";
 import type { AppConfig, AuthorityKind, TokenInfo } from "./types";
 import { PROGRAM_ID } from "./program";
-import { bondingCurvePda, metadataPda, parseBondingCurve, parseMetadata } from "./solana-shared";
+import { bondingCurvePda, metadataPda, parseBondingCurve, parseMetadata, priceFromCurve } from "./solana-shared";
 
 export const NETWORK = (process.env.SOLANA_NETWORK ?? "devnet") as AppConfig["network"];
 /** Server-side RPC. May carry an API key; never sent to the browser. */
@@ -20,6 +20,12 @@ export const BROWSER_RPC_URL = process.env.NEXT_PUBLIC_RPC_URL ?? `https://api.$
 export const FEE_BPS = Number(process.env.FEE_BPS ?? 200); // 2% platform fee
 /** Receives the platform fee. Public: it never signs anything on this server. */
 export const TREASURY = new PublicKey(process.env.TREASURY_PUBKEY ?? "11111111111111111111111111111111");
+/** Roughly the SOL a pump.fun curve holds at graduation. Configurable: it has changed. */
+export const GRADUATION_SOL = Number(process.env.PUMP_GRADUATION_SOL ?? 85);
+/** This project's own pump.fun coin. Everything token-related hides until it is set. */
+export const TOKEN_MINT = process.env.NEXT_PUBLIC_TOKEN_MINT?.trim() || null;
+export const TOKEN_SYMBOL = process.env.NEXT_PUBLIC_TOKEN_SYMBOL?.trim() || null;
+
 export const APP_NAME = process.env.APP_NAME ?? process.env.NEXT_PUBLIC_APP_NAME ?? "Project: Takeover";
 
 declare global {
@@ -37,6 +43,8 @@ export function appConfig(): AppConfig {
     network: NETWORK,
     rpcUrl: BROWSER_RPC_URL,
     programId: PROGRAM_ID.toBase58(),
+    tokenMint: TOKEN_MINT,
+    tokenSymbol: TOKEN_SYMBOL,
     treasury: TREASURY.toBase58(),
     feeBps: FEE_BPS,
     appName: APP_NAME,
@@ -97,7 +105,19 @@ export async function fetchTokenInfo(mintStr: string): Promise<TokenInfo> {
   }
   if (curve) {
     const c = parseBondingCurve(curve.data);
-    info.pump = { bondingCurve: bondingCurvePda(mint).toBase58(), creator: c?.creator?.toBase58() ?? null, complete: c?.complete ?? null };
+    const priceSol = c && !c.complete ? priceFromCurve(c, m.decimals) : null;
+    const supply = Number(m.supply) / 10 ** m.decimals;
+    const solRaised = c ? Number(c.realSolReserves) / 1e9 : null;
+    info.pump = {
+      bondingCurve: bondingCurvePda(mint).toBase58(),
+      creator: c?.creator?.toBase58() ?? null,
+      complete: c?.complete ?? null,
+      priceSol,
+      marketCapSol: priceSol !== null ? priceSol * supply : null,
+      solRaised,
+      // pump.fun has moved this threshold before, so treat it as a hint, not a fact.
+      progress: solRaised !== null ? Math.min(1, solRaised / GRADUATION_SOL) : null,
+    };
   }
   try {
     const largest = await conn.getTokenLargestAccounts(mint);

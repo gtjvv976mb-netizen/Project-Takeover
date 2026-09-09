@@ -32,13 +32,44 @@ export function parseMetadata(data: Uint8Array) {
   return { updateAuthority, mint, name, symbol, uri };
 }
 
-/** Parse the pump.fun BondingCurve account. `creator` was appended to the layout in 2025. */
+/**
+ * Parse the pump.fun BondingCurve account.
+ *
+ * Layout after the 8-byte discriminator: virtual_token_reserves, virtual_sol_reserves,
+ * real_token_reserves, real_sol_reserves and token_total_supply as u64s, then a
+ * `complete` flag at byte 48. `creator` was appended after that in 2025.
+ *
+ * The virtual reserves are what set the price; the real ones are what has actually been
+ * put in and taken out.
+ */
 export function parseBondingCurve(data: Uint8Array) {
   const buf = Buffer.from(data);
   if (buf.length < 49) return null;
+  const u64 = (o: number) => buf.readBigUInt64LE(o);
+  const virtualTokenReserves = u64(8);
+  const virtualSolReserves = u64(16);
+  const realTokenReserves = u64(24);
+  const realSolReserves = u64(32);
+  const tokenTotalSupply = u64(40);
   const complete = buf[48] === 1;
   const creator = buf.length >= 81 ? new PublicKey(buf.subarray(49, 81)) : null;
-  return { complete, creator };
+  return {
+    complete,
+    creator,
+    virtualTokenReserves,
+    virtualSolReserves,
+    realTokenReserves,
+    realSolReserves,
+    tokenTotalSupply,
+  };
+}
+
+/** SOL per token from the virtual reserves. SOL carries 9 decimals, pump.fun mints 6. */
+export function priceFromCurve(c: { virtualSolReserves: bigint; virtualTokenReserves: bigint }, decimals = 6): number | null {
+  if (c.virtualTokenReserves === BigInt(0)) return null;
+  const sol = Number(c.virtualSolReserves) / 1e9;
+  const tokens = Number(c.virtualTokenReserves) / 10 ** decimals;
+  return tokens > 0 ? sol / tokens : null;
 }
 
 /**

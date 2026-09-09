@@ -4,6 +4,7 @@ import type { AppConfig } from "@/lib/types";
 import { SlotHeight } from "./SlotHeight";
 import { Button } from "./ui";
 import { Logo } from "./Logo";
+import { TokenStrip } from "./TokenStrip";
 
 export function SiteFooter({ config }: { config: AppConfig }) {
   return (
@@ -20,7 +21,7 @@ export function SiteFooter({ config }: { config: AppConfig }) {
           </div>
         </div>
 
-        <div className="mt-10 grid gap-8 text-[14px] md:grid-cols-4">
+        <div className="mt-10 grid gap-8 text-[14px] md:grid-cols-5">
           <div>
             <div className="flex items-center gap-2">
               <Logo size={28} />
@@ -34,6 +35,10 @@ export function SiteFooter({ config }: { config: AppConfig }) {
             <Link className="block text-muted hover:text-ink" href="/sell">List your project</Link>
             <Link className="block text-muted hover:text-ink" href="/dashboard">My deals</Link>
             <Link className="block text-muted hover:text-ink" href="/how-it-works">How it works</Link>
+          </div>
+          <div className="space-y-2">
+            <div className="kicker">Coin</div>
+            <TokenStrip />
           </div>
           <div className="space-y-2">
             <div className="kicker">Network</div>

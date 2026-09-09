@@ -91,6 +91,22 @@ node scripts/e2e-program.mjs                # drives the real site against the p
 Point the app at it with `RPC_URL` and `NEXT_PUBLIC_RPC_URL` in `.env.local`, and set
 `TREASURY_PUBKEY` to the wallet that should receive fees.
 
+## The coin
+
+If a pump.fun coin is ever launched for this project, set `NEXT_PUBLIC_TOKEN_MINT` and
+`NEXT_PUBLIC_TOKEN_SYMBOL` and a `/coin` page and a footer ticker appear. Leave them
+unset and every piece of token UI hides itself rather than showing a placeholder.
+
+Price, market cap and curve progress are derived from the bonding curve account on
+chain, not from an API — validated against live mainnet coins and pump.fun's own
+figures, which agree to within 0.2% (the outliers are coins mid-trade, where their
+cached number lags the chain and ours does not).
+
+The page states plainly that the coin is not a share, carries no revenue entitlement,
+and is not required to use the marketplace. Keep it that way: the escrow's credibility
+rests on being verifiable, and a token that appears to capture platform revenue invites
+a different set of questions entirely.
+
 ## Deploying
 
 The repo carries a Render blueprint (`render.yaml`). The service runs on a paid instance

@@ -44,6 +44,14 @@ export interface TokenInfo {
     bondingCurve: string;
     creator: string | null;
     complete: boolean | null;
+    /** SOL per token, from the bonding curve's virtual reserves. Null once graduated. */
+    priceSol?: number | null;
+    /** price x circulating supply, in SOL. */
+    marketCapSol?: number | null;
+    /** SOL actually sitting in the curve. */
+    solRaised?: number | null;
+    /** Rough progress toward graduating, 0 to 1. Approximate by design. */
+    progress?: number | null;
   } | null;
   description?: string;
   /** Links the creator published in the token's own metadata. Public, self-declared. */
@@ -135,6 +143,9 @@ export interface AppConfig {
   programId: string;
   /** Where the platform fee goes. */
   treasury: string;
+  /** The project's own pump.fun coin, if one has been launched. */
+  tokenMint: string | null;
+  tokenSymbol: string | null;
   feeBps: number;
   appName: string;
 }
