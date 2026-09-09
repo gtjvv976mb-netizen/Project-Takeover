@@ -155,6 +155,11 @@ body {
   .tape-track { display:flex; width:max-content; animation: tape var(--speed,40s) linear infinite; }
   .tape:hover .tape-track { animation-play-state: paused; }
 
+  /* the logo shell refilling on hover — clip-path only, so it stays on the compositor */
+  .logo-fill svg { transition: filter var(--dur-2) var(--ease-out); }
+  .group:hover .logo-fill svg { filter: saturate(1.25); }
+  .logo-fill { display: inline-flex; }
+
   /* live pulse */
   @keyframes pulse-ring { 0%{transform:scale(1);opacity:.5} 70%,100%{transform:scale(2.4);opacity:0} }
   .live-dot { position:relative; display:inline-block; width:8px; height:8px; border-radius:999px; background: var(--color-green); }

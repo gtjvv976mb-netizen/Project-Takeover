@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { AppConfig } from "@/lib/types";
 import { SlotHeight } from "./SlotHeight";
 import { Button } from "./ui";
+import { Logo } from "./Logo";
 
 export function SiteFooter({ config }: { config: AppConfig }) {
   return (
@@ -22,7 +23,7 @@ export function SiteFooter({ config }: { config: AppConfig }) {
         <div className="mt-10 grid gap-8 text-[14px] md:grid-cols-4">
           <div>
             <div className="flex items-center gap-2">
-              <span className="h-7 w-7 rounded-lg" style={{ background: "linear-gradient(135deg, var(--color-brand), var(--color-teal))" }} aria-hidden />
+              <Logo size={28} />
               <span className="font-bold text-ink">Project: Takeover</span>
             </div>
             <p className="mt-3 text-muted">A safer way to hand over what you built on Solana.</p>

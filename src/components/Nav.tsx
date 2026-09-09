@@ -3,6 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import dynamic from "next/dynamic";
 import { useConfig } from "./ConfigContext";
+import { Logo } from "./Logo";
 
 const WalletMultiButton = dynamic(async () => (await import("@solana/wallet-adapter-react-ui")).WalletMultiButton, { ssr: false });
 
@@ -20,8 +21,9 @@ export function Nav() {
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-bg/85 backdrop-blur-md">
       <div className="wrap flex h-16 items-center gap-4">
-        <Link href="/" className="flex shrink-0 items-center gap-2.5">
-          <span className="h-8 w-8 rounded-xl" style={{ background: "linear-gradient(135deg, var(--color-brand), var(--color-teal))" }} aria-hidden />
+        <Link href="/" className="group flex shrink-0 items-center gap-2.5" aria-label="Project: Takeover — home">
+          {/* the husk refills as you point at it: somebody just moved in */}
+          <span className="logo-fill"><Logo size={30} /></span>
           <span className="text-[17px] font-bold tracking-tight text-ink">Project: Takeover</span>
         </Link>
 

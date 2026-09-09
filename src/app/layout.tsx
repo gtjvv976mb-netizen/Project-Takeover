@@ -11,6 +11,8 @@ const display = Plus_Jakarta_Sans({ subsets: ["latin"], weight: ["600", "700", "
 const ui = Inter({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-ui", display: "swap" });
 const mono = JetBrains_Mono({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-mono-face", display: "swap" });
 
+export const viewport = { themeColor: "#7C5CFF" };
+
 export const metadata: Metadata = {
   title: "Project: Takeover — buy and sell what independent devs built on Solana",
   description:
