@@ -32,20 +32,25 @@ function Hero({ live, settled, builders, onSearch, query }: {
 
       <div className="wrap relative z-10 py-16 md:py-24">
         <div className="mx-auto max-w-4xl text-center">
-          <span className="pill mx-auto" style={{ ["--tint" as string]: "var(--color-green)" }}>
-            <span className="live-dot" /> {live} projects for sale right now
-          </span>
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <Link href="/how-it-works" className="pill" style={{ ["--tint" as string]: "var(--color-brand)" }}>
+              ◆ Solana&apos;s first trustless handover
+            </Link>
+            <span className="pill" style={{ ["--tint" as string]: "var(--color-green)" }}>
+              <span className="live-dot" /> {live} live right now
+            </span>
+          </div>
 
           <h1 className="display mt-6">
-            Buy and sell the projects<br className="hidden sm:block" /> people actually built on{" "}
+            Indie devs build it.<br className="hidden sm:block" />{" "}
             <span style={{ background: "linear-gradient(90deg, var(--color-brand), var(--color-teal))", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>
-              Solana
+              You take it over.
             </span>
           </h1>
 
           <p className="lead mx-auto mt-5">
-            Tokens, pump.fun coins, websites and communities. The blockchain proves who owns it,
-            and your money is held safely in escrow until it&apos;s actually handed over.
+            Tokens, pump.fun coins, websites and communities — built by people who actually shipped them.
+            The chain proves who owns it. Nobody holds your money but the code.
           </p>
 
           <div className="mx-auto mt-8 flex max-w-xl flex-col gap-3 sm:flex-row">
@@ -66,6 +71,64 @@ function Hero({ live, settled, builders, onSearch, query }: {
             <span className="hidden items-center gap-1.5 sm:inline-flex">
               <span className="live-dot" /> Solana slot <SlotHeight />
             </span>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+
+/* ------------------------------------------------------------- the pitch */
+
+/**
+ * The three claims, given their own band so they read before anything else.
+ *
+ * The "first" claim is deliberately aimed at the mechanism rather than the category.
+ * Marketplaces that sell Solana projects already exist (Flippa, Acquire.Fi); what none
+ * of them do is settle the handover on chain with nobody holding a key. That is the
+ * part that is genuinely unoccupied, so that is the part the copy claims.
+ */
+function Pitch() {
+  const ref = useReveal<HTMLDivElement>(0.1);
+  return (
+    <section className="border-y border-line bg-surface">
+      <div className="wrap py-14">
+        <div ref={ref} data-reveal className="grid gap-5 md:grid-cols-3">
+          <div style={{ ["--i" as string]: 0 }} className="rounded-2xl border border-line bg-bg p-6">
+            <div className="text-[26px]" aria-hidden>🛠️</div>
+            <h3 className="mt-3 text-[21px] font-bold leading-snug text-ink">
+              Built in a bedroom.<br />Sold on-chain.
+            </h3>
+            <p className="mt-2 text-[15px] leading-relaxed text-muted">
+              The market for indie devs who actually shipped something — and the people who want to run it next.
+            </p>
+          </div>
+
+          <div style={{ ["--i" as string]: 1, background: "linear-gradient(150deg, color-mix(in srgb, var(--color-brand) 12%, white), color-mix(in srgb, var(--color-teal) 10%, white))" }}
+            className="rounded-2xl border border-brand/25 p-6">
+            <div className="text-[26px]" aria-hidden>🔐</div>
+            <h3 className="mt-3 text-[21px] font-bold leading-snug text-ink">
+              Nobody holds the keys.<br />Not even us.
+            </h3>
+            <p className="mt-2 text-[15px] leading-relaxed text-muted">
+              Solana&apos;s first trustless handover: your money and the token&apos;s controls swap in one
+              instruction, held by code no human can unlock.
+            </p>
+            <Link href="/how-it-works" className="mt-3 inline-flex items-center gap-1.5 text-[14px] font-semibold text-brand hover:gap-2.5">
+              See how <span aria-hidden>→</span>
+            </Link>
+          </div>
+
+          <div style={{ ["--i" as string]: 2 }} className="rounded-2xl border border-line bg-bg p-6">
+            <div className="text-[26px]" aria-hidden>🚀</div>
+            <h3 className="mt-3 text-[21px] font-bold leading-snug text-ink">
+              Stop buying bags.<br />Buy the whole project.
+            </h3>
+            <p className="mt-2 text-[15px] leading-relaxed text-muted">
+              Make an offer on a memecoin and walk away owning it outright — the mint, the metadata,
+              the creator fees, the ticker. Not a position. The project.
+            </p>
           </div>
         </div>
       </div>
@@ -291,6 +354,7 @@ export default function Home() {
         </div>
       )}
 
+      <Pitch />
       <Categories counts={counts} onPick={jumpTo} />
       <Market listings={all} query={query} type={type} setType={setType} status={status} setStatus={setStatus} loading={listings === null} />
       <HowItWorks />
