@@ -1,7 +1,11 @@
 // Shared between browser and server: program id, PDA derivation, and the mapping
 // between the database's listing ids and the on-chain accounts they point at.
+//
+// The IDL is committed under src/idl/ rather than read from target/, because target/ is
+// a build artefact that is not in git and the app must build from a clean clone.
+// scripts/build-program.sh refreshes this copy whenever the program is rebuilt.
 import { PublicKey } from "@solana/web3.js";
-import idl from "../../target/idl/takeover_escrow.json";
+import idl from "../idl/takeover_escrow.json";
 import type { AuthorityKind, ListingStatus, ListingType } from "./types";
 
 export const IDL = idl;

@@ -22,3 +22,6 @@ anchor idl build -o target/idl/takeover_escrow.json -t target/types/takeover_esc
 
 echo "==> done"
 ls -la target/deploy/*.so target/idl/*.json
+
+echo "==> syncing the IDL the app builds against"
+cp target/idl/takeover_escrow.json src/idl/takeover_escrow.json

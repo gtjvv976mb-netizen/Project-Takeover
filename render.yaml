@@ -1,0 +1,48 @@
+# Render blueprint for Project: Takeover.
+#
+# The service runs on a paid instance because it keeps a SQLite file, and Render only
+# offers persistent disks on paid plans. The database holds descriptions, images and
+# builder profiles; money and ownership live on chain, so losing this disk would cost
+# presentation, never funds.
+services:
+  - type: web
+    name: project-takeover
+    runtime: node
+    plan: starter
+    region: oregon
+    branch: main
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+
+    # SQLite needs a single writer on one machine, so this service must never scale out.
+    numInstances: 1
+
+    disk:
+      name: takeover-data
+      mountPath: /var/data
+      sizeGB: 1
+
+    envVars:
+      # node:sqlite is a built-in from Node 22.13 onward.
+      - key: NODE_VERSION
+        value: "24"
+      - key: DB_PATH
+        value: /var/data/takeover.db
+      - key: SOLANA_NETWORK
+        value: devnet
+      - key: FEE_BPS
+        value: "200"
+      # Read by the server. Swap for a dedicated RPC before this sees real traffic:
+      # the public endpoint is aggressively rate-limited.
+      - key: RPC_URL
+        value: https://api.devnet.solana.com
+      # Baked into the browser bundle at build time, so it must be set before the build.
+      - key: NEXT_PUBLIC_RPC_URL
+        value: https://api.devnet.solana.com
+      - key: NEXT_PUBLIC_APP_NAME
+        value: "Project: Takeover"
+      # Receives the platform fee. Public — the server never signs for it.
+      - key: TREASURY_PUBKEY
+        value: F4SoR29Yitwun3hCLwdoKnUkiT47kSXY8eZJjgp7Ffof

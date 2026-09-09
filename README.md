@@ -91,6 +91,27 @@ node scripts/e2e-program.mjs                # drives the real site against the p
 Point the app at it with `RPC_URL` and `NEXT_PUBLIC_RPC_URL` in `.env.local`, and set
 `TREASURY_PUBKEY` to the wallet that should receive fees.
 
+## Deploying
+
+The repo carries a Render blueprint (`render.yaml`). The service runs on a paid instance
+with a 1&nbsp;GB persistent disk mounted at `/var/data`, because the descriptive layer is a
+SQLite file and Render only offers disks on paid plans. Money and ownership are on chain,
+so losing that disk would cost titles and images, never funds.
+
+1. On Render: **New → Blueprint**, point it at this repo, and apply.
+2. It reads `render.yaml` for the build, the disk, the health check and every environment
+   variable, so there is nothing to type in by hand.
+3. `/api/health` is the health check. It returns 503 unless the app can reach the cluster
+   **and** finds the escrow program deployed there, so a bad `RPC_URL` fails the deploy
+   rather than serving a broken site.
+
+Two notes before this takes real traffic:
+
+- `RPC_URL` points at the public devnet endpoint, which is heavily rate-limited. Swap in a
+  dedicated RPC provider.
+- The service is pinned to one instance. SQLite allows a single writer, so it must not be
+  scaled out without moving the index to a hosted database first.
+
 ## Run it
 
 ```bash
