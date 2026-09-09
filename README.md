@@ -45,7 +45,7 @@ polled every two seconds. Everything respects `prefers-reduced-motion`.
 | --- | --- |
 | Program | [`B6sQ8s6rikSPqwPhm6XPpy16mVuJ87raCcVFXMA6sSVG`](https://explorer.solana.com/address/B6sQ8s6rikSPqwPhm6XPpy16mVuJ87raCcVFXMA6sSVG?cluster=devnet) |
 | Config account | `EsfWYLtLBDA9DxGfCMm6rrxRJ2SJ41xbRiPSmVMHonJV` |
-| Fee | 1000 bps (10%), and the program refuses anything above 1000 |
+| Fee | 500 bps (5%), and the program refuses anything above 500 |
 
 Unaudited. Devnet only — do not point this at mainnet funds.
 
@@ -64,7 +64,7 @@ That means a compromise of this server gets an attacker a defaced website, not a
   deadline passes, so nobody needs the operator's cooperation to get their money back.
 - **The arbitrator is bounded.** On a disputed deal it may only choose "pay the seller" or
   "refund the buyer". It cannot redirect funds or touch an undisputed deal.
-- **The fee is frozen at listing time** and hard-capped at 10% in the program itself, so a
+- **The fee is frozen at listing time** and hard-capped at 5% in the program itself, so a
   compromised config key cannot raise it and an existing deal cannot be repriced.
 
 ## Stack

@@ -360,15 +360,15 @@ describe("the fee cannot be changed under a live deal", () => {
   });
 
   it("accepts a fee exactly at the hard cap", async () => {
-    await program.methods.updateConfig(1000, arbitrator.publicKey, treasury.publicKey)
+    await program.methods.updateConfig(500, arbitrator.publicKey, treasury.publicKey)
       .accounts({ config: configPda, authority: admin.publicKey }).signers([admin]).rpc();
     const c = await program.account.config.fetch(configPda);
-    assert.equal(c.feeBps, 1000, "10% is allowed");
+    assert.equal(c.feeBps, 500, "5% is allowed");
   });
 
   it("rejects a single basis point above the cap", async () => {
     await expectFail(
-      program.methods.updateConfig(1001, arbitrator.publicKey, treasury.publicKey)
+      program.methods.updateConfig(501, arbitrator.publicKey, treasury.publicKey)
         .accounts({ config: configPda, authority: admin.publicKey }).signers([admin]).rpc(),
       "FeeTooHigh",
     );

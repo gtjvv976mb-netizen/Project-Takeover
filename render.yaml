@@ -33,7 +33,7 @@ services:
       - key: SOLANA_NETWORK
         value: devnet
       - key: FEE_BPS
-        value: "1000"
+        value: "500"
       # Read by the server. Swap for a dedicated RPC before this sees real traffic:
       # the public endpoint is aggressively rate-limited.
       - key: RPC_URL

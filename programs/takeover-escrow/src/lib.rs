@@ -38,8 +38,8 @@ pub const METADATA_PROGRAM_ID: Pubkey = pubkey!("metaqbxxUerdq28cj1RbAWkYQm3ybzj
 /// Hard ceiling on the platform fee, enforced by the program itself. The config
 /// authority cannot exceed this, ever, and neither can anyone who takes that key.
 /// It sits exactly at the operating rate so the promise is checkable on chain: this
-/// marketplace cannot charge more than 10%.
-pub const MAX_FEE_BPS: u16 = 1000;
+/// marketplace cannot charge more than 5%.
+pub const MAX_FEE_BPS: u16 = 500;
 pub const MIN_DELIVERY_DAYS: u16 = 1;
 pub const MAX_DELIVERY_DAYS: u16 = 90;
 const SECONDS_PER_DAY: i64 = 86_400;

@@ -17,7 +17,7 @@ export const NETWORK = (process.env.SOLANA_NETWORK ?? "devnet") as AppConfig["ne
 export const RPC_URL = process.env.RPC_URL ?? process.env.NEXT_PUBLIC_RPC_URL ?? `https://api.${NETWORK}.solana.com`;
 /** Endpoint handed to wallets in the browser. Keep this one keyless / CORS-open. */
 export const BROWSER_RPC_URL = process.env.NEXT_PUBLIC_RPC_URL ?? `https://api.${NETWORK}.solana.com`;
-export const FEE_BPS = Number(process.env.FEE_BPS ?? 1000); // 10%, the program's hard ceiling
+export const FEE_BPS = Number(process.env.FEE_BPS ?? 500); // 5%, the program's hard ceiling
 /** Receives the platform fee. Public: it never signs anything on this server. */
 export const TREASURY = new PublicKey(process.env.TREASURY_PUBKEY ?? "11111111111111111111111111111111");
 /** Roughly the SOL a pump.fun curve holds at graduation. Configurable: it has changed. */
