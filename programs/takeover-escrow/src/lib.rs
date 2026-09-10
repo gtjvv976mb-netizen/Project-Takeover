@@ -69,6 +69,7 @@ pub mod takeover_escrow {
         require!(rewards_bps <= fee_bps, EscrowError::RewardsExceedFee);
         let c = &mut ctx.accounts.config;
         c.fee_bps = fee_bps;
+        c.rewards_bps = rewards_bps;
         c.arbitrator = arbitrator;
         c.treasury = treasury;
         Ok(())
