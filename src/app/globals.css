@@ -7,28 +7,29 @@
 
 @theme {
   /* ---- ground & surfaces ---- */
-  --color-bg:        #FAF9FE; /* page ground, a whisper of lavender */
-  --color-bg-2:      #F2F0FB; /* recessed wells, inputs */
-  --color-surface:   #FFFFFF; /* cards, panels */
-  --color-line:      #E9E6F4; /* hairlines and card borders */
-  --color-line-2:    #D8D3EC; /* stronger dividers */
+  --color-bg:        #FAF6EF; /* warm paper — where everyone else puts cool grey */
+  --color-bg-2:      #F2EDE3; /* recessed wells, inputs */
+  --color-surface:   #FFFFFF; /* crisp white cards on the warm ground */
+  --color-line:      #E9E1D4; /* hairlines and card borders */
+  --color-line-2:    #D8CEBC; /* stronger dividers */
 
   /* ---- text ---- */
-  --color-ink:       #1B1830; /* headings and body */
-  --color-body:      #45415C; /* paragraph text */
-  --color-muted:     #625E7C; /* secondary */
-  --color-faint:     #7A7694; /* meta, timestamps */
+  --color-ink:       #241F1A; /* headings and body */
+  --color-body:      #4D453B; /* paragraph text */
+  --color-muted:     #5E564A; /* secondary */
+  --color-faint:     #8A8073; /* meta, timestamps */
 
   /* ---- brand & categories ---- */
-  --color-brand:     #7C5CFF; /* primary action */
+  --color-on-tint:   #FFFFFF; /* label on a solid tint fill — flips with the theme */
+  --color-brand:     #6C4BF5; /* primary action */
   --color-brand-2:   #A78BFA; /* lighter brand, gradients */
-  --color-violet:    #7C5CFF; /* token authorities */
-  --color-tangerine: #FF8A3D; /* pump.fun ownership */
-  --color-teal:      #10BFAE; /* projects, sites & socials */
-  --color-blue:      #3B82F6; /* verified / read from chain */
-  --color-amber:     #F5A524; /* SOL amounts, money in escrow */
-  --color-rose:      #F43F6E; /* disputes, danger */
-  --color-green:     #17A66B; /* live, for sale */
+  --color-violet:    #6C4BF5; /* token authorities */
+  --color-tangerine: #D65B2E; /* pump.fun ownership */
+  --color-teal:      #17897E; /* projects, sites & socials */
+  --color-blue:      #2C6ECB; /* verified / read from chain */
+  --color-amber:     #C07A16; /* SOL amounts, money in escrow */
+  --color-rose:      #D6335C; /* disputes, danger */
+  --color-green:     #17864F; /* live, for sale */
 
   /* ---- surfaces that colour mixes lean on ----
      Every tint in the UI is mixed toward this rather than toward literal white, so the
@@ -36,17 +37,13 @@
   --color-tint-base: #FFFFFF;
 
   /* ---- soft depth ---- */
-  --shadow-card:  0 1px 2px rgba(27,24,48,.04), 0 8px 24px -8px rgba(27,24,48,.10);
-  --shadow-lift:  0 2px 6px rgba(27,24,48,.06), 0 18px 40px -12px rgba(124,92,255,.22);
+  --edge:         #EFE7D9;  /* the solid colour a card is offset onto */
+  --shadow-card:  4px 4px 0 var(--edge);
+  --shadow-lift:  8px 9px 0 color-mix(in srgb, var(--accent, var(--color-brand)) 22%, var(--edge));
   --shadow-inset: inset 0 1px 0 rgba(255,255,255,.7);
   --sheen: rgba(255,255,255,.85);   /* the streak that sweeps a loading skeleton */
 
-  /* ---- the three drifting fields behind the hero ---- */
-  --aurora-1: #A78BFA;
-  --aurora-2: #7DE2D1;
-  --aurora-3: #FFC29B;
-  --aurora-opacity: .5;
-  --hero-scrim: linear-gradient(to bottom, rgba(255,255,255,.4), rgba(255,255,255,.7), var(--color-bg));
+  --hero-scrim: linear-gradient(to bottom, rgba(250,246,239,.22), rgba(250,246,239,.62), var(--color-bg));
 
   /* ---- type ---- */
   --font-display: var(--font-display-face), ui-sans-serif, system-ui, sans-serif;
@@ -70,40 +67,38 @@
 :root[data-theme="dark"] {
   color-scheme: dark;
 
-  --color-bg:        #0F0D24;
-  --color-bg-2:      #171432;
-  --color-surface:   #1A1738;
-  --color-line:      #2A2550;
-  --color-line-2:    #3A3467;
+  --color-bg:        #17130F;
+  --color-bg-2:      #201A15;
+  --color-surface:   #221C16;
+  --color-line:      #352C23;
+  --color-line-2:    #4A3E30;
 
-  --color-ink:       #F4F2FF;
-  --color-body:      #C2BDDC;
-  --color-muted:     #A6A1C4;
-  --color-faint:     #8B86AA;
+  --color-ink:       #F7F1E7;
+  --color-body:      #D5CBBD;
+  --color-muted:     #B4A997;
+  --color-faint:     #8A8073;
 
   /* lifted a few points each: the light-theme values go muddy on a dark ground */
-  --color-brand:     #8B6DFF;
-  --color-brand-2:   #B49BFF;
-  --color-violet:    #8B6DFF;
-  --color-tangerine: #FF9B57;
-  --color-teal:      #2ED3C2;
-  --color-blue:      #5B9BFF;
-  --color-amber:     #FFBE3D;
-  --color-rose:      #FF5C85;
-  --color-green:     #2BC98A;
+  --color-brand:     #9A80FF;
+  --color-brand-2:   #B8A4FF;
+  --color-violet:    #9A80FF;
+  --color-tangerine: #EF8052;
+  --color-teal:      #46BFB2;
+  --color-blue:      #6EA4FF;
+  --color-amber:     #EDB44E;
+  --color-rose:      #FF6B8E;
+  --color-green:     #4FBE84;
 
-  --color-tint-base: #221E44;   /* tints mix toward a raised surface, not toward white */
+  --color-on-tint:   #17130F;   /* dark-theme tints are light, so their labels go dark */
+  --color-tint-base: #2A2219;   /* tints mix toward a raised surface, not toward white */
 
-  --shadow-card:  0 1px 2px rgba(0,0,0,.45), 0 8px 24px -10px rgba(0,0,0,.7);
-  --shadow-lift:  0 2px 6px rgba(0,0,0,.5), 0 18px 40px -12px rgba(139,109,255,.4);
+  --edge:         #0D0A08;
+  --shadow-card:  4px 4px 0 var(--edge);
+  --shadow-lift:  8px 9px 0 color-mix(in srgb, var(--accent, var(--color-brand)) 28%, var(--edge));
   --shadow-inset: inset 0 1px 0 rgba(255,255,255,.06);
   --sheen: rgba(255,255,255,.07);
 
-  --aurora-1: #7C5CFF;
-  --aurora-2: #10BFAE;
-  --aurora-3: #FF8A3D;
-  --aurora-opacity: .26;
-  --hero-scrim: linear-gradient(to bottom, rgba(15,13,36,.15), rgba(15,13,36,.55), var(--color-bg));
+  --hero-scrim: linear-gradient(to bottom, rgba(23,19,15,.18), rgba(23,19,15,.58), var(--color-bg));
 }
 
 /* Theme swaps repaint the whole page; without this the ground snaps and the cards lag. */
@@ -149,23 +144,23 @@ body {
     transition: transform var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out), border-color var(--dur-2) var(--ease-out);
   }
   .card-hover:hover, .card-hover:focus-visible {
-    transform: translateY(-4px);
+    transform: translate(-2px, -3px);
     box-shadow: var(--shadow-lift);
     border-color: color-mix(in srgb, var(--accent, var(--color-brand)) 40%, var(--color-line));
   }
 
-  /* the light behind the hero: three slow, blurred colour fields */
-  .aurora { position: absolute; inset: -20% -10% auto -10%; height: 130%; pointer-events: none; overflow: hidden; z-index: 0; }
-  .aurora span {
-    position: absolute; display: block; border-radius: 50%;
-    filter: blur(70px); opacity: var(--aurora-opacity); will-change: transform;
+  /* the house seal behind the hero — the brand's own geometry, not a stock gradient */
+  .hero-seal {
+    position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 0;
+    display: grid; place-items: center;
   }
-  .aurora .a1 { width: 46vw; height: 46vw; left: -6%;  top: -12%; background: var(--aurora-1); animation: drift1 26s var(--ease-soft) infinite alternate; }
-  .aurora .a2 { width: 40vw; height: 40vw; right: -4%; top: 2%;   background: var(--aurora-2); animation: drift2 32s var(--ease-soft) infinite alternate; }
-  .aurora .a3 { width: 34vw; height: 34vw; left: 34%;  top: 30%;  background: var(--aurora-3); animation: drift3 29s var(--ease-soft) infinite alternate; }
-  @keyframes drift1 { to { transform: translate3d(9vw, 5vh, 0) scale(1.14); } }
-  @keyframes drift2 { to { transform: translate3d(-8vw, 8vh, 0) scale(1.1); } }
-  @keyframes drift3 { to { transform: translate3d(5vw, -7vh, 0) scale(1.18); } }
+  .hero-seal svg {
+    width: min(126vw, 1180px); height: auto; opacity: .5;
+    transform: translateY(-4%);
+  }
+  :root[data-theme="dark"] .hero-seal svg { opacity: .42; }
+  @keyframes seal-turn { to { transform: rotate(360deg); } }
+  .hero-seal-spin { transform-origin: 300px 300px; animation: seal-turn 240s linear infinite; }
 
   /* rounded pill for categories and status */
   .pill {
@@ -184,8 +179,8 @@ body {
     transition: transform var(--dur-1) var(--ease-soft), box-shadow var(--dur-1) var(--ease-soft), background-color var(--dur-1), color var(--dur-1);
   }
   .btn:active { transform: translateY(1px); }
-  .btn-primary { background: var(--color-brand); color:#fff; box-shadow: 0 6px 18px -6px rgba(124,92,255,.65); }
-  .btn-primary:hover { background:#6B49F5; box-shadow: 0 10px 26px -8px rgba(124,92,255,.75); }
+  .btn-primary { background: var(--color-brand); color:#fff; box-shadow: 3px 3px 0 color-mix(in srgb, var(--color-brand) 34%, transparent); }
+  .btn-primary:hover { transform: translate(1.5px,1.5px); box-shadow: 1.5px 1.5px 0 color-mix(in srgb, var(--color-brand) 34%, transparent); }
   .btn-secondary { background: var(--color-surface); color: var(--color-ink); border:1px solid var(--color-line-2); box-shadow: var(--shadow-card); }
   .btn-secondary:hover { border-color: var(--color-brand); color: var(--color-brand); }
   .btn-ghost { background: transparent; color: var(--color-muted); }
@@ -200,7 +195,8 @@ body {
     transition: border-color var(--dur-1), box-shadow var(--dur-1);
   }
   .input::placeholder { color: var(--color-faint); }
-  .input:focus { outline:none; border-color: var(--color-brand); box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-brand) 14%, transparent); }
+  .input { box-shadow: 3px 3px 0 var(--edge); }
+  .input:focus { outline:none; border-color: var(--color-brand); box-shadow: 3px 3px 0 color-mix(in srgb, var(--color-brand) 24%, transparent); }
 
   /* scroll reveal */
   [data-reveal] > * {
@@ -244,7 +240,7 @@ body {
     transition-duration:1ms !important; scroll-behavior:auto !important;
   }
   [data-reveal] > * { opacity:1 !important; transform:none !important; }
-  .aurora span { animation:none !important; }
+  .hero-seal-spin { animation:none !important; }
 }
 
 /* wallet adapter */

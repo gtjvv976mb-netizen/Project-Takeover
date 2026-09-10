@@ -6,6 +6,7 @@ import { useCountUp, useReveal } from "@/lib/motion";
 import { formatSol, shortKey, TYPE_LABELS, type BuilderProfile, type BuilderStats, type Listing, type ListingType } from "@/lib/types";
 import { Button, ListingCard, Sigil, TYPE_SHORT, TYPE_TINT } from "@/components/ui";
 import { SlotHeight } from "@/components/SlotHeight";
+import { HeroSeal } from "@/components/HeroSeal";
 import { useConfig } from "@/components/ConfigContext";
 
 type Activity = { kind: string; at: number; id: string; title: string; priceLamports: number; type: Listing["type"] };
@@ -27,8 +28,8 @@ function Hero({ live, settled, builders, onSearch, query }: {
   const settledSol = useCountUp(settled / 1e9, 1000);
   return (
     <section className="relative overflow-hidden border-b border-line">
-      {/* slow-moving field of colour behind everything */}
-      <div className="aurora" aria-hidden><span className="a1" /><span className="a2" /><span className="a3" /></div>
+      {/* the house seal, struck at wall size and turning slowly */}
+      <HeroSeal />
       <div className="absolute inset-0" style={{ background: "var(--hero-scrim)" }} aria-hidden />
 
       <div className="wrap relative z-10 py-16 md:py-24">
@@ -357,7 +358,7 @@ function HowItWorks({ feeBps }: { feeBps: number }) {
                 onClick={() => setKey(x.key)}
                 aria-pressed={x.key === key}
                 className={`rounded-xl px-4 py-2 text-[14px] font-semibold transition-colors ${
-                  x.key === key ? "text-white" : "text-muted hover:text-ink"
+                  x.key === key ? "text-on-tint" : "text-muted hover:text-ink"
                 }`}
                 style={x.key === key ? { background: x.tint } : undefined}
               >
@@ -377,7 +378,7 @@ function HowItWorks({ feeBps }: { feeBps: number }) {
               className="flex gap-4 rounded-2xl border border-line bg-bg p-5"
             >
               <span
-                className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-[15px] font-bold text-white"
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-[15px] font-bold text-on-tint"
                 style={{ background: j.tint }}
                 aria-hidden
               >

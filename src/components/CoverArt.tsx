@@ -1,35 +1,37 @@
 "use client";
-import { useMemo } from "react";
+import { useId, useMemo } from "react";
+import { hash, rosette } from "@/lib/guilloche";
 
 /**
- * Artwork for a listing. If the token has a real image we show it. Otherwise we
- * generate a piece of art that is unique to the listing but deterministic, so a
- * project always looks the same and the grid is colourful even before anyone
- * uploads anything.
+ * Artwork for a listing.
+ *
+ * This used to be a pastel mesh gradient with three soft blobs — the same picture every
+ * marketplace and AI startup has shipped since 2023. It looked pleasant and said nothing:
+ * swap it onto a different product and nobody would notice.
+ *
+ * It is now an engraved rosette, the guilloche you find on a share certificate or a
+ * banknote. That is what a listing here actually is — a certificate of title — and the
+ * pattern is struck from the asset's own seed, so it is a fingerprint of the thing being
+ * sold rather than stock decoration. Two listings can never share a face.
+ *
+ * The signature is unchanged, so every call site keeps working untouched.
  */
 
-const PALETTES: [string, string, string][] = [
-  ["#7C5CFF", "#C4B5FD", "#FDE68A"],
-  ["#10BFAE", "#7DE2D1", "#FDBA74"],
-  ["#FF8A3D", "#FDBA74", "#A78BFA"],
-  ["#3B82F6", "#93C5FD", "#F9A8D4"],
-  ["#F43F6E", "#FDA4AF", "#FCD34D"],
-  ["#17A66B", "#86EFAC", "#A5B4FC"],
-  ["#8B5CF6", "#F0ABFC", "#67E8F9"],
-  ["#F5A524", "#FCD34D", "#5EEAD4"],
+/** One colour per rosette, drawn from the same family the categories use. */
+const INKS: string[] = [
+  "#6C4BF5", // grape
+  "#2F8F62", // sage
+  "#D65B2E", // clay
+  "#2C6ECB", // ink blue
+  "#B0407A", // mulberry
+  "#177F86", // teal
+  "#C07A16", // honey
+  "#5B4BC4", // indigo
 ];
 
-function hash(s: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
-}
-
+/** The tint a listing is keyed to elsewhere in the UI (borders, hover states). */
 export function coverAccent(seed: string): string {
-  return PALETTES[hash(seed) % PALETTES.length][0];
+  return INKS[hash(seed) % INKS.length];
 }
 
 export function CoverArt({
@@ -45,42 +47,63 @@ export function CoverArt({
   className?: string;
   rounded?: string;
 }) {
+  const id = useId().replace(/:/g, "");
   const art = useMemo(() => {
     const h = hash(seed);
-    const [a, b, c] = PALETTES[h % PALETTES.length];
-    const angle = h % 360;
-    // three blobs placed from the hash, so every listing gets its own composition
-    const blobs = [0, 1, 2].map((i) => ({
-      cx: 12 + ((h >> (i * 5)) % 76),
-      cy: 12 + ((h >> (i * 7 + 3)) % 76),
-      r: 26 + ((h >> (i * 3 + 1)) % 26),
-      fill: [a, b, c][i],
-    }));
-    return { a, b, c, angle, blobs };
+    const ink = INKS[h % INKS.length];
+    // Each ring takes its gearing from a different slice of the hash, so listings whose
+    // seeds share a prefix still come out visibly different.
+    const rings = [0, 1, 2].map((i) => {
+      const b = (h >> (i * 6)) & 0xff;
+      const R = 88 - i * 16;
+      const r = 7 + (b % 12) + i * 2;
+      const d = 11 + ((b >> 3) % 24);
+      return { d: rosette(R, r, d), w: 0.5 - i * 0.07, o: 0.9 - i * 0.18 };
+    });
+    return { ink, rings, angle: h % 360 };
   }, [seed]);
 
   return (
-    <div className={`relative overflow-hidden ${rounded} ${className}`} style={{ background: `linear-gradient(${art.angle}deg, ${art.b}, ${art.c})` }}>
-      <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 h-full w-full" aria-hidden>
-        {art.blobs.map((b, i) => (
-          <circle key={i} cx={b.cx} cy={b.cy} r={b.r} fill={b.fill} opacity={0.55 - i * 0.12} />
-        ))}
+    <div
+      className={`relative overflow-hidden ${rounded} ${className}`}
+      style={{ background: `color-mix(in srgb, ${art.ink} 7%, var(--color-surface))` }}
+    >
+      <svg viewBox="0 0 200 200" preserveAspectRatio="xMidYMid meet" className="absolute inset-0 h-full w-full" aria-hidden>
+        <defs>
+          <radialGradient id={`c${id}`} cx="50%" cy="44%" r="62%">
+            <stop offset="0" stopColor={art.ink} stopOpacity="1" />
+            <stop offset="1" stopColor={art.ink} stopOpacity="0.22" />
+          </radialGradient>
+        </defs>
+        <g transform={`rotate(${art.angle} 100 100)`}>
+          {art.rings.map((r, i) => (
+            <path key={i} d={r.d} fill="none" stroke={`url(#c${id})`} strokeWidth={r.w} opacity={r.o} />
+          ))}
+        </g>
       </svg>
-      {/* a soft sheen so the art reads as glass rather than flat colour */}
-      <div className="absolute inset-0" style={{ background: "linear-gradient(160deg, rgba(255,255,255,.42), rgba(255,255,255,0) 46%)" }} />
+
       {image ? (
         <div className="absolute inset-0 grid place-items-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={image}
             alt=""
-            className="h-[58%] w-[58%] rounded-2xl border border-white/70 object-cover shadow-lg"
+            className="h-[52%] w-[52%] rounded-xl border border-line object-cover"
+            style={{ boxShadow: "3px 3px 0 color-mix(in srgb, var(--color-ink) 12%, transparent)" }}
             loading="lazy"
           />
         </div>
       ) : symbol ? (
         <div className="absolute inset-0 grid place-items-center">
-          <span className="rounded-2xl border border-white/60 bg-white/25 px-4 py-2 text-[clamp(14px,2.2vw,20px)] font-bold uppercase tracking-wide text-white drop-shadow">
+          <span
+            className="rounded-lg px-3 py-1.5 font-mono text-[clamp(12px,1.9vw,16px)] font-semibold uppercase tracking-[.1em]"
+            style={{
+              // mixing toward --color-ink lightens on dark and darkens on light
+              color: `color-mix(in srgb, ${art.ink} 62%, var(--color-ink))`,
+              background: "var(--color-surface)",
+              border: `1.5px solid color-mix(in srgb, ${art.ink} 34%, transparent)`,
+            }}
+          >
             {symbol.slice(0, 5)}
           </span>
         </div>
