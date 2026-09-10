@@ -134,10 +134,9 @@ export default function CoinPage() {
         <div className="card p-6">
           <h2 className="text-[19px] font-bold text-ink">What it is not</h2>
           <p className="mt-2 text-[15px] leading-relaxed text-muted">
-            It is not a share and it carries no vote. Holding it is not required to buy or sell
-            anything here — the escrow works identically whether you hold a single token or none at
-            all. Staking earns a share of fees; it is not a promise that the fees will be worth
-            anything.
+            It is not a share, it does not entitle you to platform revenue, and holding it is not
+            required to buy or sell anything here. The escrow works identically whether you hold a
+            single token or none at all.
           </p>
         </div>
       </section>

@@ -133,7 +133,6 @@ const buySig = await retry("buy_token", () => prog(buyer).methods.buyToken().acc
   config: pda([Buffer.from("config")]), listing, buyer: buyer.publicKey, seller: seller.publicKey,
   treasury: new PublicKey(cfg.treasury),
   mint: mint.publicKey, metadata: null, tokenMetadataProgram: null,
-  rewardPool: pda([Buffer.from("reward_pool")]),
   tokenProgram: TOKEN_PROGRAM_ID, systemProgram: SystemProgram.programId,
 }).rpc());
 const after = { seller: await bal(seller.publicKey), buyer: await bal(buyer.publicKey) };

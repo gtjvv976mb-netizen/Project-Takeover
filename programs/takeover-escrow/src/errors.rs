@@ -60,16 +60,4 @@ pub enum EscrowError {
     SelfAccept,
     #[msg("Offer must last between 1 and 90 days")]
     BadOfferWindow,
-    #[msg("The holders' share cannot exceed the platform fee")]
-    RewardsExceedFee,
-    #[msg("This deal owes stakers a share, so the reward pool must be supplied")]
-    RewardPoolRequired,
-    #[msg("Wrong reward pool for this program")]
-    BadRewardPool,
-    #[msg("Wrong mint for this reward pool")]
-    RewardMintMismatch,
-    #[msg("Nothing staked")]
-    NothingStaked,
-    #[msg("Nothing to claim")]
-    NothingToClaim,
 }
