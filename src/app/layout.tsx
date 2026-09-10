@@ -20,9 +20,9 @@ export const viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "Project: Takeover — buy and sell what independent devs built on Solana",
+  title: "Project: Takeover — think you'd run it better? Buy it.",
   description:
-    "An escrowed marketplace for Solana projects. Token authorities, pump.fun coin ownership, whole projects and communities. The chain proves who owns it before anyone pays.",
+    "Buy Solana projects outright, not by the bag. Memecoin authorities, pump.fun coin ownership, whole sites and communities — handed over on chain, with nobody holding the money but the code. Built something? Sell it.",
 };
 export const dynamic = "force-dynamic";
 

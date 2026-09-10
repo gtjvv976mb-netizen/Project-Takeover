@@ -71,7 +71,8 @@ body{${dark ? darkGround : lightGround}display:flex;align-items:center;gap:46px;
   color:${dark ? "#FFFFFF" : "#1B1830"}}
 .name{font-size:76px;font-weight:800;letter-spacing:-.03em;line-height:1}
 .name b{background:linear-gradient(105deg,${VIOLET},${TEAL});-webkit-background-clip:text;background-clip:text;color:transparent;font-weight:800}
-.tag{margin-top:16px;font-size:31px;font-weight:600;letter-spacing:-.01em;opacity:${dark ? ".78" : ".72"}}
+.tag{margin-top:16px;font-size:31px;font-weight:600;letter-spacing:-.01em;opacity:${dark ? ".82" : ".76"}}
+.tag b{background:linear-gradient(105deg,${VIOLET},${TEAL});-webkit-background-clip:text;background-clip:text;color:transparent;font-weight:800;opacity:1}
 .foot{margin-top:26px;display:flex;align-items:center;gap:14px;font-family:'JetBrains Mono',monospace;
   font-size:19px;letter-spacing:.02em;opacity:${dark ? ".62" : ".58"}}
 .dot{width:9px;height:9px;border-radius:99px;background:${TEAL};box-shadow:0 0 0 5px ${TEAL}22}
@@ -79,7 +80,7 @@ body{${dark ? darkGround : lightGround}display:flex;align-items:center;gap:46px;
   ${mark({ size: 296, glow: dark })}
   <div>
     <div class="name">Project: <b>Takeover</b></div>
-    <div class="tag">Indie devs build it. You take it over.</div>
+    <div class="tag">Think you&rsquo;d run it better? <b>Buy it.</b></div>
     <div class="foot"><span class="dot"></span>Solana's first trustless handover &nbsp;·&nbsp; project-takeover.onrender.com</div>
   </div>
 </body></html>`;

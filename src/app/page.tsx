@@ -43,15 +43,15 @@ function Hero({ live, settled, builders, onSearch, query }: {
           </div>
 
           <h1 className="display mt-6">
-            Indie devs build it.<br className="hidden sm:block" />{" "}
+            Think you&rsquo;d run it better?<br className="hidden sm:block" />{" "}
             <span style={{ background: "linear-gradient(90deg, var(--color-brand), var(--color-teal))", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>
-              You take it over.
+              Buy it.
             </span>
           </h1>
 
           <p className="lead mx-auto mt-5">
-            Tokens, pump.fun coins, websites and communities — built by people who actually shipped them.
-            The chain proves who owns it. Nobody holds your money but the code.
+            Memecoins, pump.fun coins, sites and communities — bought outright, not traded.
+            The chain proves who owns it. Nobody holds the money but the code.
           </p>
 
           <div className="mx-auto mt-8 flex max-w-xl flex-col gap-3 sm:flex-row">
@@ -64,6 +64,23 @@ function Hero({ live, settled, builders, onSearch, query }: {
             />
             <a href="#market"><Button className="w-full sm:w-auto !py-3.5">Browse projects</Button></a>
           </div>
+
+          {/* The headline speaks only to buyers. This is the other half of the market
+              given the same shape — question, then a two-word instruction — so a dev
+              landing here finds their own door instead of reading past the buyer's. */}
+          <Link
+            href="/sell"
+            className="group mt-5 inline-flex items-center gap-2 text-[15px] font-semibold text-muted transition-colors hover:text-ink"
+          >
+            Built something?
+            <span
+              className="underline decoration-2 underline-offset-4"
+              style={{ color: "var(--color-teal)", textDecorationColor: "color-mix(in srgb, var(--color-teal) 45%, transparent)" }}
+            >
+              Sell it.
+            </span>
+            <span aria-hidden className="transition-transform group-hover:translate-x-0.5">→</span>
+          </Link>
 
           <div className="mt-4 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[13px] text-muted">
             <span><strong className="text-ink">{liveCount}</strong> for sale</span>
