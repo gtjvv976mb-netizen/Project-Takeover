@@ -53,6 +53,11 @@ solana program show B6sQ8s6rikSPqwPhm6XPpy16mVuJ87raCcVFXMA6sSVG --url devnet
 
 If the treasury and arbitrator fields show the same address, the split has been undone.
 
+The site reads both from the program rather than from its own environment, so rotating a
+role on chain is enough — there is no env var to remember to update, and no way for the
+two to disagree. That was not always true: the first version of this split desynced the
+site from the chain and would have made every purchase fail with `BadTreasury`.
+
 ## Rotating a role
 
 ```bash

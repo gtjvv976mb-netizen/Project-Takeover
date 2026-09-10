@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Plus_Jakarta_Sans, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
-import { appConfig } from "@/lib/solana";
+import { chainConfig } from "@/lib/solana";
 import { WalletProviders } from "@/components/WalletProviders";
 import { ConfigProvider } from "@/components/ConfigContext";
 import { Nav } from "@/components/Nav";
@@ -26,8 +26,10 @@ export const metadata: Metadata = {
 };
 export const dynamic = "force-dynamic";
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-  const config = appConfig();
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Chain-backed, not env-backed: this config is what the browser builds its buy
+  // transactions from, so a stale treasury here means every purchase is rejected.
+  const config = await chainConfig();
   return (
     <html lang="en" className={`${display.variable} ${ui.variable} ${mono.variable}`} suppressHydrationWarning>
       <head>

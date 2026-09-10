@@ -1,4 +1,4 @@
-import { connection, appConfig } from "@/lib/solana";
+import { connection, chainConfig } from "@/lib/solana";
 import { json } from "@/lib/api-utils";
 import { PROGRAM_ID } from "@/lib/program";
 
@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
  * can reach the cluster and the escrow program is actually deployed there.
  */
 export async function GET() {
-  const cfg = appConfig();
+  const cfg = await chainConfig();
   try {
     const [slot, program] = await Promise.all([
       connection().getSlot("confirmed"),

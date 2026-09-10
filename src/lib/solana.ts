@@ -9,7 +9,7 @@ import {
 } from "@solana/web3.js";
 import { getMint, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID } from "@solana/spl-token";
 import type { AppConfig, AuthorityKind, TokenInfo } from "./types";
-import { PROGRAM_ID } from "./program";
+import { PROGRAM_ID, configPda } from "./program";
 import { bondingCurvePda, metadataPda, parseBondingCurve, parseMetadata, priceFromCurve } from "./solana-shared";
 
 export const NETWORK = (process.env.SOLANA_NETWORK ?? "devnet") as AppConfig["network"];
@@ -17,8 +17,9 @@ export const NETWORK = (process.env.SOLANA_NETWORK ?? "devnet") as AppConfig["ne
 export const RPC_URL = process.env.RPC_URL ?? process.env.NEXT_PUBLIC_RPC_URL ?? `https://api.${NETWORK}.solana.com`;
 /** Endpoint handed to wallets in the browser. Keep this one keyless / CORS-open. */
 export const BROWSER_RPC_URL = process.env.NEXT_PUBLIC_RPC_URL ?? `https://api.${NETWORK}.solana.com`;
+/** Fallback only. The program's own config is authoritative — see `chainConfig()`. */
 export const FEE_BPS = Number(process.env.FEE_BPS ?? 500); // 5%, the program's hard ceiling
-/** Receives the platform fee. Public: it never signs anything on this server. */
+/** Fallback only, same reason. Public: it never signs anything on this server. */
 export const TREASURY = new PublicKey(process.env.TREASURY_PUBKEY ?? "11111111111111111111111111111111");
 /** Roughly the SOL a pump.fun curve holds at graduation. Configurable: it has changed. */
 export const GRADUATION_SOL = Number(process.env.PUMP_GRADUATION_SOL ?? 85);
@@ -49,6 +50,40 @@ export function appConfig(): AppConfig {
     feeBps: FEE_BPS,
     appName: APP_NAME,
   };
+}
+
+/**
+ * The same config, but with the treasury and fee read from the program instead of from
+ * this server's environment.
+ *
+ * These two used to come only from env vars, which meant rotating the treasury on chain
+ * silently desynced the site: the browser kept building `buy_token` with the old address,
+ * the program compared it against the new one, and every purchase failed with
+ * BadTreasury. Worse, the e2e scripts read the treasury from the chain directly, so they
+ * carried on passing while the actual website was broken.
+ *
+ * The program is the only thing that can be right about its own fee and treasury, so ask
+ * it. Env vars stay as a fallback for the moment before `initialize` has ever run.
+ */
+let cached: { at: number; cfg: AppConfig } | null = null;
+
+export async function chainConfig(): Promise<AppConfig> {
+  const base = appConfig();
+  if (cached && Date.now() - cached.at < 30_000) return cached.cfg;
+  try {
+    const info = await connection().getAccountInfo(configPda(), "confirmed");
+    if (info) {
+      // discriminator(8) authority(32) arbitrator(32) treasury(32) fee_bps(2)
+      const treasury = new PublicKey(info.data.subarray(72, 104)).toBase58();
+      const feeBps = info.data.readUInt16LE(104);
+      const cfg = { ...base, treasury, feeBps };
+      cached = { at: Date.now(), cfg };
+      return cfg;
+    }
+  } catch {
+    // fall through to the env-var view rather than failing the whole page
+  }
+  return base;
 }
 
 export function feeFor(priceLamports: number): number {
