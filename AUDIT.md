@@ -224,6 +224,26 @@ resolve would let the indexer follow the chain instead of interrogating it.
 - **Metaplex PDA.** `verify_metadata_pda` checks the metadata account is the canonical
   derivation for the mint before any authority is moved.
 
+## On the tests themselves
+
+Two defects this week were invisible to a full, green test suite, and both for the same
+reason: the tests built their own transactions instead of using the code the browser runs.
+
+- Rotating the treasury desynced the site from the chain. Every purchase would have failed
+  with `BadTreasury`. Every e2e script passed, because each read the treasury from the
+  config account directly — a path no browser takes.
+- The first `pending_authority` design could not deserialise an already-deployed config
+  account. The bankrun suite passed, because it starts from a fresh account that is already
+  the new size.
+
+`scripts/e2e-browser-paths.mts` closes that gap. It imports `src/lib/client/program.ts` —
+the actual browser module — and takes the treasury from the site's own `/api/config`, the
+way the listing page does. The only thing faked is the wallet adapter object, which cannot
+exist outside a browser.
+
+It was verified against the bug it exists for: re-pointing the site's treasury at the old
+address makes three of its four flows fail immediately.
+
 ## Not in scope
 
 Off-chain delivery for `PumpCreator` and `Offchain` listings cannot be verified by any
