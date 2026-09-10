@@ -134,7 +134,7 @@ export default function Sell() {
                     const cur = k === "mint" ? token.mintAuthority : k === "freeze" ? token.freezeAuthority : token.updateAuthority;
                     const mine = cur === me;
                     return (
-                      <label key={k} className={`flex items-center gap-3  border px-3 py-2 text-sm ${mine ? "border-line" : "border-white/5 opacity-50"}`}>
+                      <label key={k} className={`flex items-center gap-3  border px-3 py-2 text-sm ${mine ? "border-line" : "border-line opacity-50"}`}>
                         <input type="checkbox" disabled={!mine} checked={authorities.includes(k)} onChange={(e) => setAuthorities(e.target.checked ? [...authorities, k] : authorities.filter((x) => x !== k))} />
                         <span className="flex-1">{AUTH_LABELS[k]}</span>
                         <span className="font-mono text-xs text-faint">{cur ? (mine ? "you" : shortKey(cur)) : "revoked"}</span>

@@ -136,7 +136,7 @@ export function ListingCard({ l }: { l: Listing }) {
           </div>
           <span
             className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-[13px] font-semibold transition-all group-hover:gap-2.5"
-            style={{ background: `color-mix(in srgb, ${tint} 12%, white)`, color: `color-mix(in srgb, ${tint} 80%, #1B1830)` }}
+            style={{ background: `color-mix(in srgb, ${tint} 12%, var(--color-tint-base))`, color: `color-mix(in srgb, ${tint} 80%, var(--color-ink))` }}
           >
             View <span aria-hidden>→</span>
           </span>
@@ -190,8 +190,8 @@ export function Alert({ kind = "info", children }: { kind?: "info" | "error" | "
     <div
       className="rounded-xl border px-3.5 py-3 text-[14px] leading-relaxed"
       style={{
-        background: `color-mix(in srgb, ${tint} 7%, white)`,
-        borderColor: `color-mix(in srgb, ${tint} 28%, white)`,
+        background: `color-mix(in srgb, ${tint} 7%, var(--color-tint-base))`,
+        borderColor: `color-mix(in srgb, ${tint} 28%, var(--color-tint-base))`,
         color: "var(--color-ink)",
       }}
     >

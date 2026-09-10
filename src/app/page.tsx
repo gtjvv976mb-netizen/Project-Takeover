@@ -29,7 +29,7 @@ function Hero({ live, settled, builders, onSearch, query }: {
     <section className="relative overflow-hidden border-b border-line">
       {/* slow-moving field of colour behind everything */}
       <div className="aurora" aria-hidden><span className="a1" /><span className="a2" /><span className="a3" /></div>
-      <div className="absolute inset-0 bg-gradient-to-b from-white/40 via-white/70 to-bg" aria-hidden />
+      <div className="absolute inset-0" style={{ background: "var(--hero-scrim)" }} aria-hidden />
 
       <div className="wrap relative z-10 py-16 md:py-24">
         <div className="mx-auto max-w-4xl text-center">
@@ -106,7 +106,7 @@ function Pitch() {
             </p>
           </div>
 
-          <div style={{ ["--i" as string]: 1, background: "linear-gradient(150deg, color-mix(in srgb, var(--color-brand) 12%, white), color-mix(in srgb, var(--color-teal) 10%, white))" }}
+          <div style={{ ["--i" as string]: 1, background: "linear-gradient(150deg, color-mix(in srgb, var(--color-brand) 12%, var(--color-tint-base)), color-mix(in srgb, var(--color-teal) 10%, var(--color-tint-base)))" }}
             className="rounded-2xl border border-brand/25 p-6">
             <div className="text-[26px]" aria-hidden>🔐</div>
             <h3 className="mt-3 text-[21px] font-bold leading-snug text-ink">
@@ -152,7 +152,7 @@ function Categories({ counts, onPick }: { counts: Record<ListingType, number>; o
             className="card card-hover flex items-start gap-4 p-5 text-left"
           >
             <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl text-[18px]"
-              style={{ background: `color-mix(in srgb, ${TYPE_TINT[t]} 14%, white)` }} aria-hidden>
+              style={{ background: `color-mix(in srgb, ${TYPE_TINT[t]} 14%, var(--color-tint-base))` }} aria-hidden>
               {t === "token_authority" ? "🔑" : t === "pump_creator" ? "🚀" : "🌐"}
             </span>
             <span className="min-w-0">

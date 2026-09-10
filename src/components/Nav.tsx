@@ -3,6 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import dynamic from "next/dynamic";
 import { useConfig } from "./ConfigContext";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { Logo } from "./Logo";
 
 const WalletMultiButton = dynamic(async () => (await import("@solana/wallet-adapter-react-ui")).WalletMultiButton, { ssr: false });
@@ -37,6 +38,7 @@ export function Nav() {
         </nav>
 
         <div className="ml-auto flex shrink-0 items-center gap-2">
+          <ThemeToggle />
           {cfg.network !== "mainnet-beta" && (
             <span className="pill hidden sm:inline-flex" style={{ ["--tint" as string]: "var(--color-amber)" }}>{cfg.network}</span>
           )}

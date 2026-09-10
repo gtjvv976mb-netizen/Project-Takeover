@@ -6,12 +6,18 @@ import { WalletProviders } from "@/components/WalletProviders";
 import { ConfigProvider } from "@/components/ConfigContext";
 import { Nav } from "@/components/Nav";
 import { SiteFooter } from "@/components/SiteFooter";
+import { THEME_SCRIPT } from "@/components/ThemeToggle";
 
 const display = Plus_Jakarta_Sans({ subsets: ["latin"], weight: ["600", "700", "800"], variable: "--font-display-face", display: "swap" });
 const ui = Inter({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-ui", display: "swap" });
 const mono = JetBrains_Mono({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-mono-face", display: "swap" });
 
-export const viewport = { themeColor: "#7C5CFF" };
+export const viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#FAF9FE" },
+    { media: "(prefers-color-scheme: dark)", color: "#0F0D24" },
+  ],
+};
 
 export const metadata: Metadata = {
   title: "Project: Takeover — buy and sell what independent devs built on Solana",
@@ -23,7 +29,12 @@ export const dynamic = "force-dynamic";
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const config = appConfig();
   return (
-    <html lang="en" className={`${display.variable} ${ui.variable} ${mono.variable}`}>
+    <html lang="en" className={`${display.variable} ${ui.variable} ${mono.variable}`} suppressHydrationWarning>
+      <head>
+        {/* Stamps data-theme before the body paints. Any later and dark-mode visitors
+            get a white flash on every navigation. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+      </head>
       <body className="min-h-screen antialiased">
         <ConfigProvider config={config}>
           <WalletProviders rpcUrl={config.rpcUrl}>

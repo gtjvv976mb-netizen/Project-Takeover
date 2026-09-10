@@ -5,7 +5,7 @@ import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { signedPost } from "@/lib/client/api";
 import { acceptOfferOnChain, cancelOfferOnChain, makeOfferOnChain } from "@/lib/client/program";
 import { formatSol, shortKey, type AuthorityKind, type Listing, type TokenInfo, type WantedEntry } from "@/lib/types";
-import { Alert, Button, Chip, Field, inputCls, ListingCard, Sigil, TokenAvatar } from "@/components/ui";
+import { Alert, Button, Chip, Field, inputCls, ListingCard, Sigil } from "@/components/ui";
 import { CoverArt } from "@/components/CoverArt";
 import { explorerUrl, useConfig } from "@/components/ConfigContext";
 

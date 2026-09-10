@@ -9,8 +9,8 @@ const FLOWS = [
     tag: "Fully on chain",
     steps: [
       "You pick which authorities are for sale: mint, freeze, and the Metaplex metadata update authority.",
-      "You sign one transaction moving them to the escrow wallet. The listing only goes live after the server confirms the transfer on chain.",
-      "A buyer pays the price into escrow. In a single transaction, escrow hands every authority to the buyer and pays you, minus the fee.",
+      "You sign one transaction handing them to the escrow program's own address — a key nobody has, not even us. The program itself refuses to list a token whose authorities have not arrived.",
+      "A buyer pays. In that same transaction the program hands every authority to them and pays you, minus the fee. There is no moment where one side has both.",
       "Cancel any time before a sale and the authorities come straight back to you.",
     ],
   },
@@ -46,8 +46,8 @@ export default function HowItWorks() {
           <div className="kicker">How it works</div>
           <h1 className="display mt-4">Nobody has<br />to trust anybody.</h1>
           <p className="lead mt-6">
-            Three kinds of assets, three escrow flows. In every one of them the buyer&apos;s SOL sits in the escrow
-            wallet until the thing being sold has provably changed hands.
+            Three kinds of assets, three escrow flows. In every one of them the buyer&apos;s SOL is held by a program
+            on Solana — not a company account — and only moves when the thing being sold has provably changed hands.
           </p>
         </div>
       </section>
@@ -78,15 +78,15 @@ export default function HowItWorks() {
         </div>
       </section>
 
-      <section className="border-b border-line bg-surface text-white">
+      <section className="border-b border-line bg-bg-2">
         <div className="wrap py-10">
-          <h2 className="title-lg text-white">We never sell wallets or private keys.</h2>
+          <h2 className="title-lg">We never sell wallets or private keys.</h2>
           <p className="mt-5 max-w-[60ch] text-[16px] leading-relaxed text-muted">
             A private key can be copied, so a wallet that has been &ldquo;sold&rdquo; is never really the buyer&apos;s.
             Instead you sell what the wallet <em>controls</em>: authorities move on chain, and everything else goes
             through a handover the escrow can verify or a human can arbitrate.
           </p>
-          <div className="mt-10 grid gap-px bg-surface/15 sm:grid-cols-3">
+          <div className="mt-10 grid gap-px bg-line sm:grid-cols-3">
             {[
               [`${cfg.feeBps / 100}%`, "Platform fee, taken from the seller's payout only when a deal settles. The program refuses to go above 5%, whoever asks."],
               ["0", "Private keys ever changing hands on this site."],
@@ -104,7 +104,7 @@ export default function HowItWorks() {
       <section>
         <div className="wrap py-10 flex flex-wrap items-center gap-6">
           <h2 className="title-lg flex-1">Ready to put<br />your work up?</h2>
-          <Link href="/sell" className="inline-flex items-center border border-line bg-brand px-7 py-4 font-mono text-[12px] uppercase tracking-[0.16em]">
+          <Link href="/sell" className="btn btn-primary px-7 py-4 font-mono text-[12px] uppercase tracking-[0.16em]">
             List your work →
           </Link>
         </div>

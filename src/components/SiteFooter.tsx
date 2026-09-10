@@ -12,7 +12,7 @@ export function SiteFooter({ config }: { config: AppConfig }) {
       <div className="wrap py-14">
         <div className="card overflow-hidden">
           <div className="relative grid gap-6 p-8 md:grid-cols-[1.4fr_auto] md:items-center"
-            style={{ background: "linear-gradient(120deg, color-mix(in srgb, var(--color-brand) 10%, white), color-mix(in srgb, var(--color-teal) 10%, white))" }}>
+            style={{ background: "linear-gradient(120deg, color-mix(in srgb, var(--color-brand) 10%, var(--color-tint-base)), color-mix(in srgb, var(--color-teal) 10%, var(--color-tint-base)))" }}>
             <div>
               <h2 className="title-lg">Built something? Get paid for it.</h2>
               <p className="lead mt-2">List it in a couple of minutes. You only pay a fee when it sells.</p>
