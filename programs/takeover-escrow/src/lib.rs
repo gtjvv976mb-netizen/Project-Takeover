@@ -44,6 +44,14 @@ pub const MIN_DELIVERY_DAYS: u16 = 1;
 pub const MAX_DELIVERY_DAYS: u16 = 90;
 const SECONDS_PER_DAY: i64 = 86_400;
 
+/// How long the arbitrator has to rule before the buyer can simply take their money back.
+///
+/// The point is not to rush arbitration — two weeks is generous — but to put a ceiling on
+/// it. Without a ceiling, "raise a dispute" is a button either party can press to freeze
+/// the other's money indefinitely, which is precisely the hostage-taking this escrow
+/// exists to prevent.
+const ARBITRATION_WINDOW: i64 = 14 * SECONDS_PER_DAY;
+
 #[program]
 pub mod takeover_escrow {
     use super::*;
@@ -98,6 +106,7 @@ pub mod takeover_escrow {
         l.delivery_days = delivery_days;
         l.kind = kind;
         l.escrowed = 0;
+        l.disputed_at = 0;
         l.bump = ctx.bumps.listing;
 
         match kind {
@@ -269,9 +278,23 @@ pub mod takeover_escrow {
         let now = Clock::get()?.unix_timestamp;
         {
             let l = &ctx.accounts.listing;
-            require!(l.status == Status::Funded, EscrowError::BadStatus);
-            require!(now >= l.deadline, EscrowError::DeadlineNotReached);
             require_keys_eq!(l.buyer, ctx.accounts.buyer.key(), EscrowError::NotBuyer);
+
+            let allowed = match l.status {
+                // The ordinary path: the seller never delivered.
+                Status::Funded => now >= l.deadline,
+                // Arbitration was raised and then abandoned. Listings created before
+                // `disputed_at` existed read it back as 0, so fall back to the delivery
+                // deadline for those rather than leaving them stuck forever.
+                Status::Disputed => {
+                    let raised = if l.disputed_at != 0 { l.disputed_at } else { l.deadline };
+                    now >= raised
+                        .checked_add(ARBITRATION_WINDOW)
+                        .ok_or(EscrowError::MathOverflow)?
+                }
+                _ => return err!(EscrowError::BadStatus),
+            };
+            require!(allowed, EscrowError::DeadlineNotReached);
         }
         settle_to_buyer(&mut ctx)
     }
@@ -282,6 +305,7 @@ pub mod takeover_escrow {
         require!(l.status == Status::Funded, EscrowError::BadStatus);
         let who = ctx.accounts.signer.key();
         require!(who == l.buyer || who == l.seller, EscrowError::NotBuyer);
+        l.disputed_at = Clock::get()?.unix_timestamp;
         l.status = Status::Disputed;
         Ok(())
     }
@@ -309,6 +333,8 @@ pub mod takeover_escrow {
         if escrowed != 0 {
             let seeds: &[&[u8]] = &[b"listing", seller_key.as_ref(), listing_id.as_ref(), &[bump]];
             let mint = ctx.accounts.mint.as_ref().ok_or(EscrowError::MintMismatch)?;
+            // Every other instruction pins the mint to the listing; this one did not.
+            require_keys_eq!(ctx.accounts.listing.mint, mint.key(), EscrowError::MintMismatch);
             transfer_authorities(
                 escrowed,
                 &ctx.accounts.listing.to_account_info(),
@@ -393,6 +419,7 @@ pub mod takeover_escrow {
             &ctx.accounts.seller,
             &ctx.accounts.mint,
             ctx.accounts.metadata.as_ref(),
+            ctx.accounts.token_metadata_program.as_ref(),
             &ctx.accounts.buyer.key(),
             &ctx.accounts.token_program,
         )?;
@@ -555,11 +582,13 @@ fn transfer_authorities<'info>(
 /// No PDA custody: the seller signs, so the token program and Metaplex each verify the
 /// signer really is the current authority. If they are not, the CPI fails and the whole
 /// instruction reverts — including the payment.
+#[allow(clippy::too_many_arguments)]
 fn transfer_authorities_from_signer<'info>(
     wanted: u8,
     seller: &Signer<'info>,
     mint: &Account<'info, Mint>,
     metadata: Option<&AccountInfo<'info>>,
+    metadata_program: Option<&AccountInfo<'info>>,
     new_authority: &Pubkey,
     token_program: &Program<'info, Token>,
 ) -> Result<()> {
@@ -581,10 +610,14 @@ fn transfer_authorities_from_signer<'info>(
 
     if wanted & AUTH_METADATA != 0 {
         let md = metadata.ok_or(EscrowError::BadMetadataAccount)?;
+        // The Metaplex program account has to be in the invocation or there is nothing to
+        // call into. Its sibling `transfer_authorities` always passed it; this one did
+        // not, which quietly broke every offer that included the metadata authority.
+        let md_program = metadata_program.ok_or(EscrowError::MissingMetadataProgram)?;
         verify_metadata_pda(md.key, &mint.key())?;
         invoke(
             &update_metadata_authority_ix(md.key, seller.key, new_authority),
-            &[md.clone(), seller.to_account_info()],
+            &[md.clone(), seller.to_account_info(), md_program.clone()],
         )?;
     }
     Ok(())
@@ -788,7 +821,8 @@ pub struct AcceptOffer<'info> {
     /// CHECK: verified against the canonical Metaplex PDA for this mint.
     #[account(mut)]
     pub metadata: Option<AccountInfo<'info>>,
-    /// CHECK: only used when a metadata authority is part of the offer.
+    /// CHECK: pinned to the Metaplex Token Metadata program id.
+    #[account(address = METADATA_PROGRAM_ID @ EscrowError::BadMetadataAccount)]
     pub token_metadata_program: Option<AccountInfo<'info>>,
     pub token_program: Program<'info, Token>,
 }

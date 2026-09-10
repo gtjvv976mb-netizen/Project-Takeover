@@ -331,6 +331,55 @@ describe("the arbitrator is bounded", () => {
   });
 });
 
+describe("a dispute cannot be used to hold the money hostage", () => {
+  // The bug this covers: `dispute` moved a listing out of Funded, and the deadline
+  // refund only fired on Funded, so a seller who had taken payment and delivered
+  // nothing could raise a dispute and freeze the buyer's SOL for as long as the
+  // arbitrator stayed quiet — forever, if that key were ever lost.
+  const id = idBytes("hostage");
+  let listing: PublicKey;
+
+  before(async () => {
+    listing = listingPda(seller.publicKey, id);
+    await program.methods.createListing(id, KIND_OFFCHAIN, new BN(LAMPORTS_PER_SOL), 0, 5)
+      .accounts({ config: configPda, listing, seller: seller.publicKey, mint: null, systemProgram: SystemProgram.programId })
+      .signers([seller]).rpc();
+    await program.methods.fund()
+      .accounts({ listing, buyer: buyer.publicKey, systemProgram: SystemProgram.programId })
+      .signers([buyer]).rpc();
+    // the seller, about to lose on the deadline, blocks the automatic refund
+    await program.methods.dispute()
+      .accounts({ listing, signer: seller.publicKey }).signers([seller]).rpc();
+  });
+
+  it("records when the dispute was raised", async () => {
+    const l = await program.account.listing.fetch(listing);
+    assert.ok(l.disputedAt.toNumber() > 0, "disputedAt should be stamped");
+  });
+
+  it("still refuses a refund while arbitration has time to run", async () => {
+    await setClockAhead(86_400 * 6); // past the delivery deadline, inside the window
+    // Signed by the buyer rather than the stranger below: bankrun keeps one blockhash,
+    // so two identical refunds from the same signer would collide as the same signature.
+    await expectFail(
+      program.methods.refund()
+        .accounts({ config: configPda, listing, signer: buyer.publicKey, seller: seller.publicKey, buyer: buyer.publicKey, treasury: treasury.publicKey })
+        .signers([buyer]).rpc(),
+      "DeadlineNotReached",
+    );
+  });
+
+  it("returns the money once arbitration has clearly been abandoned", async () => {
+    await setClockAhead(86_400 * 15); // past the 14-day arbitration window
+    const before = await ctx.banksClient.getBalance(buyer.publicKey);
+    await program.methods.refund()
+      .accounts({ config: configPda, listing, signer: stranger.publicKey, seller: seller.publicKey, buyer: buyer.publicKey, treasury: treasury.publicKey })
+      .signers([stranger]).rpc();
+    const after = await ctx.banksClient.getBalance(buyer.publicKey);
+    assert.equal(after - before, BigInt(LAMPORTS_PER_SOL), "buyer gets the full amount back");
+  });
+});
+
 describe("the fee cannot be changed under a live deal", () => {
   const id = idBytes("fee-frozen");
   let listing: PublicKey;

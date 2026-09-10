@@ -101,7 +101,8 @@
         },
         {
           "name": "token_metadata_program",
-          "optional": true
+          "optional": true,
+          "address": "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
         },
         {
           "name": "token_program",
@@ -1535,6 +1536,21 @@
           {
             "name": "bump",
             "type": "u8"
+          },
+          {
+            "name": "disputed_at",
+            "docs": [
+              "When a dispute was raised, or 0 if none ever was.",
+              "",
+              "Without this a dispute is a permanent freeze: `dispute` moves the listing out of",
+              "`Funded`, and the deadline refund only fires on `Funded`, so either party could",
+              "take the money hostage for as long as the arbitrator stayed silent. Recording the",
+              "moment lets the refund come back once arbitration has clearly been abandoned.",
+              "",
+              "Last field on purpose: listings written before this read it back as 0, and the",
+              "refund path falls back to the delivery deadline for those."
+            ],
+            "type": "i64"
           }
         ]
       }

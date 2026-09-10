@@ -75,6 +75,16 @@ pub struct Listing {
     /// Authorities actually in the program's custody.
     pub escrowed: u8,
     pub bump: u8,
+    /// When a dispute was raised, or 0 if none ever was.
+    ///
+    /// Without this a dispute is a permanent freeze: `dispute` moves the listing out of
+    /// `Funded`, and the deadline refund only fires on `Funded`, so either party could
+    /// take the money hostage for as long as the arbitrator stayed silent. Recording the
+    /// moment lets the refund come back once arbitration has clearly been abandoned.
+    ///
+    /// Last field on purpose: listings written before this read it back as 0, and the
+    /// refund path falls back to the delivery deadline for those.
+    pub disputed_at: i64,
 }
 
 impl Listing {

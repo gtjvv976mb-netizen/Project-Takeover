@@ -1,7 +1,7 @@
 # Security review — takeover-escrow
 
 **Program** `B6sQ8s6rikSPqwPhm6XPpy16mVuJ87raCcVFXMA6sSVG` (devnet)
-**Commit** e903920 · **Reviewed** 2026-09-10 · **Scope** `programs/takeover-escrow/src/`
+**Commit** e903920 · **Reviewed** 2026-09-10 · **Fixes applied** 2026-09-11 · **Scope** `programs/takeover-escrow/src/`
 
 ## What this is, and what it is not
 
@@ -20,18 +20,18 @@ Halborn. Expect roughly $15–50k and two to four weeks.
 
 | # | Severity | Issue | Status |
 |---|----------|-------|--------|
-| H-1 | High | A dispute permanently blocks the deadline refund | Open |
-| H-2 | High | One key is upgrade authority, treasury and arbitrator | Open |
-| M-1 | Medium | `accept_offer` never passes the Metaplex program to its CPI | Open |
-| M-2 | Medium | `accept_offer` does not pin `token_metadata_program` | Open |
-| M-3 | Medium | `cancel` does not check the mint against the listing | Open |
-| M-4 | Medium | Arbitrator power is unbounded and untimed | Open |
+| H-1 | High | A dispute permanently blocks the deadline refund | **Fixed** |
+| H-2 | High | One key is upgrade authority, treasury and arbitrator | Open — deployment, not code |
+| M-1 | Medium | `accept_offer` never passes the Metaplex program to its CPI | **Fixed** |
+| M-2 | Medium | `accept_offer` does not pin `token_metadata_program` | **Fixed** |
+| M-3 | Medium | `cancel` does not check the mint against the listing | **Fixed** |
+| M-4 | Medium | Arbitrator power is unbounded and untimed | Bounded by H-1's timeout; still a single key |
 | L-1 | Low | `close_listing` sweeps donated lamports to the seller | Open |
 | L-2 | Low | No events, so the index depends entirely on polling | Open |
 
 ---
 
-### H-1 · A dispute permanently blocks the deadline refund
+### H-1 · A dispute permanently blocks the deadline refund — FIXED
 
 `refund` is the mechanism that makes the escrow safe without an operator:
 
@@ -115,7 +115,7 @@ attacker's favour.
 
 ---
 
-### M-1 · `accept_offer` never passes the Metaplex program to its CPI
+### M-1 · `accept_offer` never passes the Metaplex program to its CPI — FIXED
 
 `transfer_authorities` (used by `buy_token` and `cancel`) passes the program account:
 
@@ -138,7 +138,7 @@ sibling does. Then extend the offers e2e to cover a metadata-bearing offer.
 
 ---
 
-### M-2 · `accept_offer` does not pin `token_metadata_program`
+### M-2 · `accept_offer` does not pin `token_metadata_program` — FIXED
 
 Every other context constrains it:
 
@@ -155,7 +155,7 @@ arbitrary-program CPI. Pin it now.
 
 ---
 
-### M-3 · `cancel` does not check the mint against the listing
+### M-3 · `cancel` does not check the mint against the listing — FIXED
 
 `escrow_authority` and `buy_token` both assert `require_keys_eq!(l.mint, mint.key())`.
 `cancel` does not, and passes whatever mint it is given straight to
@@ -229,3 +229,34 @@ Off-chain delivery for `PumpCreator` and `Offchain` listings cannot be verified 
 program, and the escrow does not claim to. Those flows rest on the buyer's confirmation
 and, failing that, on arbitration. The web app, its wallet-signature auth and its SQLite
 index were not reviewed here.
+
+
+---
+
+## Fixes applied 2026-09-11
+
+**H-1.** `Listing` gained `disputed_at`, stamped by `dispute`. `refund` now accepts a
+`Disputed` listing once `ARBITRATION_WINDOW` (14 days) has passed since the dispute was
+raised, so an unanswered arbitration can no longer hold a buyer's money forever. Listings
+written before the field existed read it back as 0 and fall back to the delivery deadline,
+so nothing is stranded by the upgrade.
+
+Covered by three regression tests in `tests/escrow.test.ts` under *"a dispute cannot be
+used to hold the money hostage"*, using bankrun's clock control to walk past both the
+delivery deadline and the arbitration window. The middle test asserts the refund is still
+correctly refused inside the window, so the fix cannot silently become "refund always
+works".
+
+**M-1.** `transfer_authorities_from_signer` now takes the Metaplex program account and
+includes it in the CPI, matching its sibling. `accept_offer` passes it through.
+
+**M-2.** `AcceptOffer.token_metadata_program` is pinned with
+`#[account(address = METADATA_PROGRAM_ID)]`, as every other context already was.
+
+**M-3.** `cancel` asserts `listing.mint == mint.key()` before moving anything.
+
+All 36 tests across the three suites pass. Redeployed to devnet and the handover
+re-proved end to end afterwards.
+
+**Still open: H-2.** It is a property of the deployment, not the code, and no commit can
+close it. One wallet remains upgrade authority, treasury and arbitrator.
