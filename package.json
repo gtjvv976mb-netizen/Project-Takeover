@@ -14,7 +14,8 @@
     "lint": "eslint",
     "program:build": "./scripts/build-program.sh",
     "program:test": "tsx --test-concurrency=1 tests/escrow.test.ts && tsx --test-concurrency=1 tests/metadata.test.ts && tsx --test-concurrency=1 tests/offers.test.ts",
-    "e2e:offers": "node scripts/e2e-offers.mjs"
+    "e2e:offers": "node scripts/e2e-offers.mjs",
+    "e2e:rewards": "node scripts/e2e-rewards.mjs"
   },
   "dependencies": {
     "@solana/spl-token": "^0.4.15",

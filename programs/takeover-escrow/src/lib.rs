@@ -23,7 +23,7 @@ use anchor_lang::solana_program::{
     system_instruction,
 };
 use anchor_spl::token::spl_token::instruction::AuthorityType;
-use anchor_spl::token::{self, Mint, SetAuthority, Token};
+use anchor_spl::token::{self, Mint, SetAuthority, Token, TokenAccount, Transfer};
 
 pub mod errors;
 pub mod state;
@@ -49,26 +49,128 @@ pub mod takeover_escrow {
     use super::*;
 
     /// One-time setup of the fee, treasury and arbitrator.
-    pub fn initialize(ctx: Context<Initialize>, fee_bps: u16, arbitrator: Pubkey, treasury: Pubkey) -> Result<()> {
+    pub fn initialize(ctx: Context<Initialize>, fee_bps: u16, rewards_bps: u16, arbitrator: Pubkey, treasury: Pubkey) -> Result<()> {
         require!(fee_bps <= MAX_FEE_BPS, EscrowError::FeeTooHigh);
+        require!(rewards_bps <= fee_bps, EscrowError::RewardsExceedFee);
         let c = &mut ctx.accounts.config;
         c.authority = ctx.accounts.authority.key();
         c.arbitrator = arbitrator;
         c.treasury = treasury;
         c.fee_bps = fee_bps;
+        c.rewards_bps = rewards_bps;
         c.bump = ctx.bumps.config;
         Ok(())
     }
 
     /// Rotate the arbitrator, treasury or default fee. Never touches listing funds, and
     /// listings already created keep the fee they were created with.
-    pub fn update_config(ctx: Context<UpdateConfig>, fee_bps: u16, arbitrator: Pubkey, treasury: Pubkey) -> Result<()> {
+    pub fn update_config(ctx: Context<UpdateConfig>, fee_bps: u16, rewards_bps: u16, arbitrator: Pubkey, treasury: Pubkey) -> Result<()> {
         require!(fee_bps <= MAX_FEE_BPS, EscrowError::FeeTooHigh);
+        require!(rewards_bps <= fee_bps, EscrowError::RewardsExceedFee);
         let c = &mut ctx.accounts.config;
         c.fee_bps = fee_bps;
         c.arbitrator = arbitrator;
         c.treasury = treasury;
         Ok(())
+    }
+
+
+    /// Open the reward pool. One per program, fixed to a single mint.
+    ///
+    /// Deliberately separate from `initialize`: the marketplace works with no pool at
+    /// all, which is what lets it run before the coin exists.
+    pub fn init_reward_pool(ctx: Context<InitRewardPool>) -> Result<()> {
+        let p = &mut ctx.accounts.reward_pool;
+        p.mint = ctx.accounts.mint.key();
+        p.total_staked = 0;
+        p.acc_per_token = 0;
+        p.owed = 0;
+        p.bump = ctx.bumps.reward_pool;
+        p.vault_bump = ctx.bumps.vault;
+        Ok(())
+    }
+
+    /// Put tokens in and start earning from the next sale onward.
+    pub fn stake(ctx: Context<StakeTokens>, amount: u64) -> Result<()> {
+        require!(amount > 0, EscrowError::NothingStaked);
+
+        let st = &mut ctx.accounts.stake;
+        if st.owner == Pubkey::default() {
+            st.owner = ctx.accounts.owner.key();
+            st.bump = ctx.bumps.stake;
+        }
+        // Settle before the balance moves, or the new size would be credited for a
+        // period it was not staked.
+        st.settle(&ctx.accounts.reward_pool)?;
+
+        token::transfer(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.from.to_account_info(),
+                    to: ctx.accounts.vault.to_account_info(),
+                    authority: ctx.accounts.owner.to_account_info(),
+                },
+            ),
+            amount,
+        )?;
+
+        let pool = &mut ctx.accounts.reward_pool;
+        pool.total_staked = pool.total_staked.checked_add(amount).ok_or(EscrowError::MathOverflow)?;
+        st.amount = st.amount.checked_add(amount).ok_or(EscrowError::MathOverflow)?;
+        st.reward_debt = (st.amount as u128)
+            .checked_mul(pool.acc_per_token)
+            .ok_or(EscrowError::MathOverflow)?
+            / ACC_SCALE;
+        Ok(())
+    }
+
+    /// Take tokens back out. Anything already earned stays owed and is still claimable,
+    /// so leaving never costs a staker rewards they had accrued.
+    pub fn unstake(ctx: Context<StakeTokens>, amount: u64) -> Result<()> {
+        let st = &mut ctx.accounts.stake;
+        require!(amount > 0 && st.amount >= amount, EscrowError::NothingStaked);
+        st.settle(&ctx.accounts.reward_pool)?;
+
+        let pool_bump = ctx.accounts.reward_pool.bump;
+        let seeds: &[&[u8]] = &[b"reward_pool", &[pool_bump]];
+        token::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.vault.to_account_info(),
+                    to: ctx.accounts.from.to_account_info(),
+                    authority: ctx.accounts.reward_pool.to_account_info(),
+                },
+                &[seeds],
+            ),
+            amount,
+        )?;
+
+        let pool = &mut ctx.accounts.reward_pool;
+        pool.total_staked = pool.total_staked.checked_sub(amount).ok_or(EscrowError::MathOverflow)?;
+        st.amount = st.amount.checked_sub(amount).ok_or(EscrowError::MathOverflow)?;
+        st.reward_debt = (st.amount as u128)
+            .checked_mul(pool.acc_per_token)
+            .ok_or(EscrowError::MathOverflow)?
+            / ACC_SCALE;
+        Ok(())
+    }
+
+    /// Withdraw earned SOL. Pays out of `owed` only, so the pool's own rent is never
+    /// touched and the account cannot be drained closed.
+    pub fn claim(ctx: Context<Claim>) -> Result<()> {
+        let st = &mut ctx.accounts.stake;
+        st.settle(&ctx.accounts.reward_pool)?;
+        let amount = st.pending;
+        require!(amount > 0, EscrowError::NothingToClaim);
+
+        let pool = &mut ctx.accounts.reward_pool;
+        require!(pool.owed >= amount, EscrowError::EscrowBalanceMismatch);
+        pool.owed = pool.owed.checked_sub(amount).ok_or(EscrowError::MathOverflow)?;
+        st.pending = 0;
+
+        pay_from_listing(&pool.to_account_info(), &ctx.accounts.owner.to_account_info(), amount)
     }
 
     /// Open a listing. Token listings start as `Draft` and only become purchasable once
@@ -93,6 +195,7 @@ pub mod takeover_escrow {
         l.listing_id = listing_id;
         l.price = price;
         l.fee_bps = ctx.accounts.config.fee_bps;
+        l.rewards_bps = ctx.accounts.config.rewards_bps;
         l.escrowed_lamports = 0;
         l.deadline = 0;
         l.delivery_days = delivery_days;
@@ -187,8 +290,13 @@ pub mod takeover_escrow {
             require_keys_eq!(l.mint, ctx.accounts.mint.key(), EscrowError::MintMismatch);
             require_keys_eq!(l.seller, ctx.accounts.seller.key(), EscrowError::NotSeller);
             require_keys_eq!(ctx.accounts.config.treasury, ctx.accounts.treasury.key(), EscrowError::BadTreasury);
-            (l.seller_take()?, l.fee()?, l.escrowed, l.bump, l.listing_id, l.seller)
+            (l.seller_take()?, (l.holder_cut()?, l.treasury_cut()?), l.escrowed, l.bump, l.listing_id, l.seller)
         };
+        let (holder_cut, treasury_cut) = fee;
+        require!(
+            holder_cut == 0 || ctx.accounts.reward_pool.is_some(),
+            EscrowError::RewardPoolRequired
+        );
 
         // pay first, so a failure to move the authorities reverts the payment too
         pay_from_signer(
@@ -197,14 +305,16 @@ pub mod takeover_escrow {
             &ctx.accounts.system_program,
             seller_take,
         )?;
-        if fee > 0 {
-            pay_from_signer(
-                &ctx.accounts.buyer,
-                &ctx.accounts.treasury,
-                &ctx.accounts.system_program,
-                fee,
-            )?;
-        }
+        let buyer = ctx.accounts.buyer.clone();
+        let sys = ctx.accounts.system_program.clone();
+        let treasury_ai = ctx.accounts.treasury.clone();
+        split_fee(
+            holder_cut,
+            treasury_cut,
+            ctx.accounts.reward_pool.as_mut(),
+            &treasury_ai,
+            |to, amount| pay_from_signer(&buyer, to, &sys, amount),
+        )?;
 
         let seeds: &[&[u8]] = &[b"listing", seller_key.as_ref(), listing_id.as_ref(), &[bump]];
         transfer_authorities(
@@ -352,6 +462,7 @@ pub mod takeover_escrow {
         o.offer_id = offer_id;
         o.price = price;
         o.fee_bps = ctx.accounts.config.fee_bps;
+        o.rewards_bps = ctx.accounts.config.rewards_bps;
         o.escrowed_lamports = price;
         o.expiry = now
             .checked_add((expiry_days as i64).checked_mul(SECONDS_PER_DAY).ok_or(EscrowError::MathOverflow)?)
@@ -384,8 +495,13 @@ pub mod takeover_escrow {
             require_keys_eq!(o.buyer, ctx.accounts.buyer.key(), EscrowError::NotBuyer);
             require_keys_neq!(o.buyer, ctx.accounts.seller.key(), EscrowError::SelfAccept);
             require_keys_eq!(ctx.accounts.config.treasury, ctx.accounts.treasury.key(), EscrowError::BadTreasury);
-            (o.seller_take()?, o.fee()?, o.authorities)
+            (o.seller_take()?, (o.holder_cut()?, o.treasury_cut()?), o.authorities)
         };
+        let (holder_cut, treasury_cut) = fee;
+        require!(
+            holder_cut == 0 || ctx.accounts.reward_pool.is_some(),
+            EscrowError::RewardPoolRequired
+        );
 
         // hand the controls over first; if any of this fails nothing is paid
         transfer_authorities_from_signer(
@@ -399,7 +515,15 @@ pub mod takeover_escrow {
 
         let offer_ai = ctx.accounts.offer.to_account_info();
         pay_from_listing(&offer_ai, &ctx.accounts.seller.to_account_info(), seller_take)?;
-        pay_from_listing(&offer_ai, &ctx.accounts.treasury, fee)?;
+        let treasury_ai = ctx.accounts.treasury.clone();
+        let from = offer_ai.clone();
+        split_fee(
+            holder_cut,
+            treasury_cut,
+            ctx.accounts.reward_pool.as_mut(),
+            &treasury_ai,
+            |to, amount| pay_from_listing(&from, to, amount),
+        )?;
 
         let o = &mut ctx.accounts.offer;
         o.escrowed_lamports = 0;
@@ -473,18 +597,83 @@ fn pay_from_listing<'info>(listing: &AccountInfo<'info>, to: &AccountInfo<'info>
     Ok(())
 }
 
+
+/// Credit the stakers' share and hand the rest to the treasury.
+///
+/// `holder_cut` is carved out of the fee, never added to it: the seller pays the same 5%
+/// whichever way this falls. If nothing is staked there is nobody to pay, so the whole
+/// fee goes to the treasury rather than piling up in a pool no one can claim.
+///
+/// `pay` moves lamports from wherever the money currently is — the buyer's wallet for an
+/// atomic token sale, the escrow account for everything else.
+fn split_fee<'info>(
+    holder_cut: u64,
+    treasury_cut: u64,
+    pool: Option<&mut Account<'info, RewardPool>>,
+    treasury: &AccountInfo<'info>,
+    mut pay: impl FnMut(&AccountInfo<'info>, u64) -> Result<()>,
+) -> Result<()> {
+    let fee = holder_cut
+        .checked_add(treasury_cut)
+        .ok_or(EscrowError::MathOverflow)?;
+
+    let Some(pool) = pool else {
+        // No pool supplied. Only allowed when this deal owes stakers nothing; the
+        // caller has already refused the instruction otherwise.
+        require!(holder_cut == 0, EscrowError::RewardPoolRequired);
+        if fee > 0 {
+            pay(treasury, fee)?;
+        }
+        return Ok(());
+    };
+
+    if holder_cut == 0 || pool.total_staked == 0 {
+        if fee > 0 {
+            pay(treasury, fee)?;
+        }
+        return Ok(());
+    }
+
+    pay(&pool.to_account_info(), holder_cut)?;
+    // Raise the running per-token total. Everyone staked right now is owed their share
+    // of this deposit; nobody who stakes later can reach back for it.
+    let per_token = (holder_cut as u128)
+        .checked_mul(ACC_SCALE)
+        .ok_or(EscrowError::MathOverflow)?
+        / pool.total_staked as u128;
+    pool.acc_per_token = pool
+        .acc_per_token
+        .checked_add(per_token)
+        .ok_or(EscrowError::MathOverflow)?;
+    pool.owed = pool.owed.checked_add(holder_cut).ok_or(EscrowError::MathOverflow)?;
+
+    if treasury_cut > 0 {
+        pay(treasury, treasury_cut)?;
+    }
+    Ok(())
+}
+
 fn settle_to_seller(ctx: &mut Context<Settle>) -> Result<()> {
-    let (seller_take, fee, held) = {
+    let (seller_take, fee, holder_cut, treasury_cut, held) = {
         let l = &ctx.accounts.listing;
         require_keys_eq!(l.seller, ctx.accounts.seller.key(), EscrowError::NotSeller);
         require_keys_eq!(ctx.accounts.config.treasury, ctx.accounts.treasury.key(), EscrowError::BadTreasury);
-        (l.seller_take()?, l.fee()?, l.escrowed_lamports)
+        (l.seller_take()?, l.fee()?, l.holder_cut()?, l.treasury_cut()?, l.escrowed_lamports)
     };
     require!(held >= seller_take.checked_add(fee).ok_or(EscrowError::MathOverflow)?, EscrowError::EscrowBalanceMismatch);
+    require!(holder_cut == 0 || ctx.accounts.reward_pool.is_some(), EscrowError::RewardPoolRequired);
 
     let listing_ai = ctx.accounts.listing.to_account_info();
     pay_from_listing(&listing_ai, &ctx.accounts.seller, seller_take)?;
-    pay_from_listing(&listing_ai, &ctx.accounts.treasury, fee)?;
+    let treasury_ai = ctx.accounts.treasury.clone();
+    let from = listing_ai.clone();
+    split_fee(
+        holder_cut,
+        treasury_cut,
+        ctx.accounts.reward_pool.as_mut(),
+        &treasury_ai,
+        |to, amount| pay_from_listing(&from, to, amount),
+    )?;
 
     let l = &mut ctx.accounts.listing;
     l.escrowed_lamports = 0;
@@ -695,6 +884,10 @@ pub struct BuyToken<'info> {
     pub token_metadata_program: Option<AccountInfo<'info>>,
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
+    /// Supplied whenever the deal owes stakers a share. Its address is the program's
+    /// own PDA, so a caller cannot substitute a pool they control.
+    #[account(mut, seeds = [b"reward_pool"], bump = reward_pool.bump)]
+    pub reward_pool: Option<Account<'info, RewardPool>>,
 }
 
 #[derive(Accounts)]
@@ -723,6 +916,10 @@ pub struct Settle<'info> {
     /// CHECK: matched against config.treasury.
     #[account(mut)]
     pub treasury: AccountInfo<'info>,
+    /// Supplied whenever the deal owes stakers a share. Its address is the program's
+    /// own PDA, so a caller cannot substitute a pool they control.
+    #[account(mut, seeds = [b"reward_pool"], bump = reward_pool.bump)]
+    pub reward_pool: Option<Account<'info, RewardPool>>,
 }
 
 #[derive(Accounts)]
@@ -791,6 +988,10 @@ pub struct AcceptOffer<'info> {
     /// CHECK: only used when a metadata authority is part of the offer.
     pub token_metadata_program: Option<AccountInfo<'info>>,
     pub token_program: Program<'info, Token>,
+    /// Supplied whenever the deal owes stakers a share. Its address is the program's
+    /// own PDA, so a caller cannot substitute a pool they control.
+    #[account(mut, seeds = [b"reward_pool"], bump = reward_pool.bump)]
+    pub reward_pool: Option<Account<'info, RewardPool>>,
 }
 
 #[derive(Accounts)]
@@ -816,4 +1017,66 @@ pub struct CloseListing<'info> {
     pub listing: Account<'info, Listing>,
     #[account(mut)]
     pub seller: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct InitRewardPool<'info> {
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    #[account(seeds = [b"config"], bump = config.bump, has_one = authority)]
+    pub config: Account<'info, Config>,
+    #[account(init, payer = authority, space = RewardPool::SPACE, seeds = [b"reward_pool"], bump)]
+    pub reward_pool: Account<'info, RewardPool>,
+    pub mint: Account<'info, Mint>,
+    /// Holds the staked tokens. Owned by the pool PDA, so only the program can move them.
+    #[account(
+        init,
+        payer = authority,
+        token::mint = mint,
+        token::authority = reward_pool,
+        seeds = [b"reward_vault"],
+        bump
+    )]
+    pub vault: Account<'info, TokenAccount>,
+    pub token_program: Program<'info, Token>,
+    pub system_program: Program<'info, System>,
+    pub rent: Sysvar<'info, Rent>,
+}
+
+#[derive(Accounts)]
+pub struct StakeTokens<'info> {
+    #[account(mut)]
+    pub owner: Signer<'info>,
+    #[account(mut, seeds = [b"reward_pool"], bump = reward_pool.bump)]
+    pub reward_pool: Account<'info, RewardPool>,
+    #[account(mut, seeds = [b"reward_vault"], bump = reward_pool.vault_bump)]
+    pub vault: Account<'info, TokenAccount>,
+    /// The staker's own token account. Must be for the pool's mint.
+    #[account(mut, constraint = from.mint == reward_pool.mint @ EscrowError::RewardMintMismatch)]
+    pub from: Account<'info, TokenAccount>,
+    #[account(
+        init_if_needed,
+        payer = owner,
+        space = Stake::SPACE,
+        seeds = [b"stake", owner.key().as_ref()],
+        bump
+    )]
+    pub stake: Account<'info, Stake>,
+    pub token_program: Program<'info, Token>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct Claim<'info> {
+    #[account(mut)]
+    pub owner: Signer<'info>,
+    #[account(mut, seeds = [b"reward_pool"], bump = reward_pool.bump)]
+    pub reward_pool: Account<'info, RewardPool>,
+    #[account(
+        mut,
+        seeds = [b"stake", owner.key().as_ref()],
+        bump = stake.bump,
+        has_one = owner
+    )]
+    pub stake: Account<'info, Stake>,
 }

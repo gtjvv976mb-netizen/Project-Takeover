@@ -45,6 +45,13 @@ pub struct Config {
     /// Default fee for new listings, in basis points.
     pub fee_bps: u16,
     pub bump: u8,
+    /// How much of `fee_bps` belongs to stakers rather than to the treasury.
+    /// 300 of 500 means three of the five points go to holders.
+    ///
+    /// Deliberately the last field: accounts written before this existed read it back as
+    /// zero, which means "no holder share" — the safe reading, and it lets the upgrade
+    /// land without migrating anything.
+    pub rewards_bps: u16,
 }
 
 impl Config {
@@ -75,6 +82,9 @@ pub struct Listing {
     /// Authorities actually in the program's custody.
     pub escrowed: u8,
     pub bump: u8,
+    /// Frozen at creation alongside `fee_bps`, so changing the split can never be
+    /// applied to a deal that is already live. Zero on listings that predate it.
+    pub rewards_bps: u16,
 }
 
 impl Listing {
@@ -91,6 +101,24 @@ impl Listing {
     pub fn seller_take(&self) -> Result<u64> {
         self.price
             .checked_sub(self.fee()?)
+            .ok_or(crate::EscrowError::MathOverflow.into())
+    }
+
+    /// The stakers' slice of the fee, taken out of the fee rather than added to it. The
+    /// seller pays 5% either way; this only decides where it lands.
+    pub fn holder_cut(&self) -> Result<u64> {
+        Ok(self
+            .price
+            .checked_mul(self.rewards_bps as u64)
+            .ok_or(crate::EscrowError::MathOverflow)?
+            / 10_000)
+    }
+
+    /// What is left of the fee for the treasury. `rewards_bps <= fee_bps` is enforced at
+    /// config time, so this cannot underflow.
+    pub fn treasury_cut(&self) -> Result<u64> {
+        self.fee()?
+            .checked_sub(self.holder_cut()?)
             .ok_or(crate::EscrowError::MathOverflow.into())
     }
 }
@@ -131,6 +159,8 @@ pub struct Offer {
     pub authorities: u8,
     pub status: OfferStatus,
     pub bump: u8,
+    /// Frozen when the offer is made, for the same reason `fee_bps` is.
+    pub rewards_bps: u16,
 }
 
 impl Offer {
@@ -148,5 +178,99 @@ impl Offer {
         self.price
             .checked_sub(self.fee()?)
             .ok_or(crate::EscrowError::MathOverflow.into())
+    }
+
+    /// The stakers' slice of the fee, taken out of the fee rather than added to it. The
+    /// seller pays 5% either way; this only decides where it lands.
+    pub fn holder_cut(&self) -> Result<u64> {
+        Ok(self
+            .price
+            .checked_mul(self.rewards_bps as u64)
+            .ok_or(crate::EscrowError::MathOverflow)?
+            / 10_000)
+    }
+
+    /// What is left of the fee for the treasury. `rewards_bps <= fee_bps` is enforced at
+    /// config time, so this cannot underflow.
+    pub fn treasury_cut(&self) -> Result<u64> {
+        self.fee()?
+            .checked_sub(self.holder_cut()?)
+            .ok_or(crate::EscrowError::MathOverflow.into())
+    }
+}
+
+/// Fixed-point scale for `acc_per_token`.
+///
+/// Fees arrive in lamports and are divided by the whole staked supply, so the per-token
+/// figure is almost always a fraction. Carrying it at 1e12 in a u128 means a single
+/// lamport spread across a billion staked tokens still moves the number, instead of
+/// truncating to zero and quietly vanishing.
+pub const ACC_SCALE: u128 = 1_000_000_000_000;
+
+/// Where the holders' share of every fee accumulates.
+///
+/// Solana has no way to iterate holders inside an instruction, so nothing is ever pushed
+/// out. Instead each deposit raises `acc_per_token`, a running total of lamports earned
+/// per staked token since the pool opened, and every staker subtracts whatever the
+/// counter read when they last settled. That difference is what they are owed — the
+/// standard accumulator, and it costs the same whether ten people stake or ten thousand.
+///
+/// It also fixes the obvious attack on a snapshot: you cannot buy in just before a
+/// payout and sell straight after, because you only accrue while the counter is moving
+/// and only for tokens you had staked at the time.
+#[account]
+pub struct RewardPool {
+    /// The mint whose stakers are paid. Fixed at creation.
+    pub mint: Pubkey,
+    /// Tokens currently staked, the denominator for every deposit.
+    pub total_staked: u64,
+    /// Lamports earned per staked token since inception, scaled by `ACC_SCALE`.
+    pub acc_per_token: u128,
+    /// Lamports this account holds on stakers' behalf, excluding its own rent. Claims
+    /// are checked against this so a claim can never eat the rent and close the pool.
+    pub owed: u64,
+    pub bump: u8,
+    pub vault_bump: u8,
+}
+
+impl RewardPool {
+    pub const SPACE: usize = 8 + 32 + 8 + 16 + 8 + 1 + 1 + 32;
+}
+
+/// One staker's position.
+#[account]
+pub struct Stake {
+    pub owner: Pubkey,
+    /// Tokens this account has in the vault.
+    pub amount: u64,
+    /// `amount * acc_per_token / ACC_SCALE` as of the last settlement. Everything the
+    /// counter has climbed since is what this staker has not been credited yet.
+    pub reward_debt: u128,
+    /// Settled and waiting to be withdrawn.
+    pub pending: u64,
+    pub bump: u8,
+}
+
+impl Stake {
+    pub const SPACE: usize = 8 + 32 + 8 + 16 + 8 + 1 + 16;
+
+    /// Move everything the counter has earned since last time into `pending`.
+    ///
+    /// Called before any change to `amount`, and before any claim. Skipping it anywhere
+    /// would pay the new balance for a period it did not hold.
+    pub fn settle(&mut self, pool: &RewardPool) -> Result<()> {
+        let accrued = (self.amount as u128)
+            .checked_mul(pool.acc_per_token)
+            .ok_or(crate::EscrowError::MathOverflow)?
+            / ACC_SCALE;
+        let earned = accrued
+            .checked_sub(self.reward_debt)
+            .ok_or(crate::EscrowError::MathOverflow)?;
+        self.pending = self
+            .pending
+            .checked_add(u64::try_from(earned).map_err(|_| crate::EscrowError::MathOverflow)?)
+            .ok_or(crate::EscrowError::MathOverflow)?;
+        self.reward_debt = accrued;
+        Ok(())
     }
 }

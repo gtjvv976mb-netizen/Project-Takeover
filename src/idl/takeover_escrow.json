@@ -106,6 +106,35 @@
         {
           "name": "token_program",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "reward_pool",
+          "docs": [
+            "Supplied whenever the deal owes stakers a share. Its address is the program's",
+            "own PDA, so a caller cannot substitute a pool they control."
+          ],
+          "writable": true,
+          "optional": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  119,
+                  97,
+                  114,
+                  100,
+                  95,
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": []
@@ -210,6 +239,35 @@
         {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "reward_pool",
+          "docs": [
+            "Supplied whenever the deal owes stakers a share. Its address is the program's",
+            "own PDA, so a caller cannot substitute a pool they control."
+          ],
+          "writable": true,
+          "optional": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  119,
+                  97,
+                  114,
+                  100,
+                  95,
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": []
@@ -343,6 +401,80 @@
         {
           "name": "buyer",
           "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "claim",
+      "docs": [
+        "Withdraw earned SOL. Pays out of `owed` only, so the pool's own rent is never",
+        "touched and the account cannot be drained closed."
+      ],
+      "discriminator": [
+        62,
+        198,
+        214,
+        193,
+        213,
+        159,
+        108,
+        210
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "stake"
+          ]
+        },
+        {
+          "name": "reward_pool",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  119,
+                  97,
+                  114,
+                  100,
+                  95,
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "stake",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              }
+            ]
+          }
         }
       ],
       "args": []
@@ -708,6 +840,121 @@
       "args": []
     },
     {
+      "name": "init_reward_pool",
+      "docs": [
+        "Open the reward pool. One per program, fixed to a single mint.",
+        "",
+        "Deliberately separate from `initialize`: the marketplace works with no pool at",
+        "all, which is what lets it run before the coin exists."
+      ],
+      "discriminator": [
+        40,
+        91,
+        119,
+        84,
+        139,
+        51,
+        53,
+        228
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "reward_pool",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  119,
+                  97,
+                  114,
+                  100,
+                  95,
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "vault",
+          "docs": [
+            "Holds the staked tokens. Owned by the pool PDA, so only the program can move them."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  119,
+                  97,
+                  114,
+                  100,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "initialize",
       "docs": [
         "One-time setup of the fee, treasury and arbitrator."
@@ -755,6 +1002,10 @@
       "args": [
         {
           "name": "fee_bps",
+          "type": "u16"
+        },
+        {
+          "name": "rewards_bps",
           "type": "u16"
         },
         {
@@ -950,6 +1201,35 @@
         {
           "name": "treasury",
           "writable": true
+        },
+        {
+          "name": "reward_pool",
+          "docs": [
+            "Supplied whenever the deal owes stakers a share. Its address is the program's",
+            "own PDA, so a caller cannot substitute a pool they control."
+          ],
+          "writable": true,
+          "optional": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  119,
+                  97,
+                  114,
+                  100,
+                  95,
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": []
@@ -1036,6 +1316,35 @@
         {
           "name": "treasury",
           "writable": true
+        },
+        {
+          "name": "reward_pool",
+          "docs": [
+            "Supplied whenever the deal owes stakers a share. Its address is the program's",
+            "own PDA, so a caller cannot substitute a pool they control."
+          ],
+          "writable": true,
+          "optional": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  119,
+                  97,
+                  114,
+                  100,
+                  95,
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": []
@@ -1123,12 +1432,272 @@
         {
           "name": "treasury",
           "writable": true
+        },
+        {
+          "name": "reward_pool",
+          "docs": [
+            "Supplied whenever the deal owes stakers a share. Its address is the program's",
+            "own PDA, so a caller cannot substitute a pool they control."
+          ],
+          "writable": true,
+          "optional": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  119,
+                  97,
+                  114,
+                  100,
+                  95,
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": [
         {
           "name": "pay_seller",
           "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "stake",
+      "docs": [
+        "Put tokens in and start earning from the next sale onward."
+      ],
+      "discriminator": [
+        206,
+        176,
+        202,
+        18,
+        200,
+        209,
+        179,
+        108
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "reward_pool",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  119,
+                  97,
+                  114,
+                  100,
+                  95,
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  119,
+                  97,
+                  114,
+                  100,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "from",
+          "docs": [
+            "The staker's own token account. Must be for the pool's mint."
+          ],
+          "writable": true
+        },
+        {
+          "name": "stake",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "unstake",
+      "docs": [
+        "Take tokens back out. Anything already earned stays owed and is still claimable,",
+        "so leaving never costs a staker rewards they had accrued."
+      ],
+      "discriminator": [
+        90,
+        95,
+        107,
+        42,
+        205,
+        124,
+        50,
+        225
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "reward_pool",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  119,
+                  97,
+                  114,
+                  100,
+                  95,
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  119,
+                  97,
+                  114,
+                  100,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "from",
+          "docs": [
+            "The staker's own token account. Must be for the pool's mint."
+          ],
+          "writable": true
+        },
+        {
+          "name": "stake",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
         }
       ]
     },
@@ -1182,6 +1751,10 @@
           "type": "u16"
         },
         {
+          "name": "rewards_bps",
+          "type": "u16"
+        },
+        {
           "name": "arbitrator",
           "type": "pubkey"
         },
@@ -1230,6 +1803,32 @@
         162,
         73,
         229
+      ]
+    },
+    {
+      "name": "RewardPool",
+      "discriminator": [
+        134,
+        121,
+        197,
+        211,
+        133,
+        154,
+        82,
+        32
+      ]
+    },
+    {
+      "name": "Stake",
+      "discriminator": [
+        150,
+        197,
+        176,
+        29,
+        55,
+        132,
+        112,
+        149
       ]
     }
   ],
@@ -1378,6 +1977,36 @@
       "code": 6028,
       "name": "BadOfferWindow",
       "msg": "Offer must last between 1 and 90 days"
+    },
+    {
+      "code": 6029,
+      "name": "RewardsExceedFee",
+      "msg": "The holders' share cannot exceed the platform fee"
+    },
+    {
+      "code": 6030,
+      "name": "RewardPoolRequired",
+      "msg": "This deal owes stakers a share, so the reward pool must be supplied"
+    },
+    {
+      "code": 6031,
+      "name": "BadRewardPool",
+      "msg": "Wrong reward pool for this program"
+    },
+    {
+      "code": 6032,
+      "name": "RewardMintMismatch",
+      "msg": "Wrong mint for this reward pool"
+    },
+    {
+      "code": 6033,
+      "name": "NothingStaked",
+      "msg": "Nothing staked"
+    },
+    {
+      "code": 6034,
+      "name": "NothingToClaim",
+      "msg": "Nothing to claim"
     }
   ],
   "types": [
@@ -1417,6 +2046,18 @@
           {
             "name": "bump",
             "type": "u8"
+          },
+          {
+            "name": "rewards_bps",
+            "docs": [
+              "How much of `fee_bps` belongs to stakers rather than to the treasury.",
+              "300 of 500 means three of the five points go to holders.",
+              "",
+              "Deliberately the last field: accounts written before this existed read it back as",
+              "zero, which means \"no holder share\" — the safe reading, and it lets the upgrade",
+              "land without migrating anything."
+            ],
+            "type": "u16"
           }
         ]
       }
@@ -1535,6 +2176,14 @@
           {
             "name": "bump",
             "type": "u8"
+          },
+          {
+            "name": "rewards_bps",
+            "docs": [
+              "Frozen at creation alongside `fee_bps`, so changing the split can never be",
+              "applied to a deal that is already live. Zero on listings that predate it."
+            ],
+            "type": "u16"
           }
         ]
       }
@@ -1618,6 +2267,13 @@
           {
             "name": "bump",
             "type": "u8"
+          },
+          {
+            "name": "rewards_bps",
+            "docs": [
+              "Frozen when the offer is made, for the same reason `fee_bps` is."
+            ],
+            "type": "u16"
           }
         ]
       }
@@ -1635,6 +2291,105 @@
           },
           {
             "name": "Cancelled"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RewardPool",
+      "docs": [
+        "Where the holders' share of every fee accumulates.",
+        "",
+        "Solana has no way to iterate holders inside an instruction, so nothing is ever pushed",
+        "out. Instead each deposit raises `acc_per_token`, a running total of lamports earned",
+        "per staked token since the pool opened, and every staker subtracts whatever the",
+        "counter read when they last settled. That difference is what they are owed — the",
+        "standard accumulator, and it costs the same whether ten people stake or ten thousand.",
+        "",
+        "It also fixes the obvious attack on a snapshot: you cannot buy in just before a",
+        "payout and sell straight after, because you only accrue while the counter is moving",
+        "and only for tokens you had staked at the time."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "docs": [
+              "The mint whose stakers are paid. Fixed at creation."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "total_staked",
+            "docs": [
+              "Tokens currently staked, the denominator for every deposit."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "acc_per_token",
+            "docs": [
+              "Lamports earned per staked token since inception, scaled by `ACC_SCALE`."
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "owed",
+            "docs": [
+              "Lamports this account holds on stakers' behalf, excluding its own rent. Claims",
+              "are checked against this so a claim can never eat the rent and close the pool."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "vault_bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Stake",
+      "docs": [
+        "One staker's position."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "docs": [
+              "Tokens this account has in the vault."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "reward_debt",
+            "docs": [
+              "`amount * acc_per_token / ACC_SCALE` as of the last settlement. Everything the",
+              "counter has climbed since is what this staker has not been credited yet."
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "pending",
+            "docs": [
+              "Settled and waiting to be withdrawn."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
           }
         ]
       }
