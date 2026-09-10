@@ -61,7 +61,6 @@ pub mod takeover_escrow {
         require!(fee_bps <= MAX_FEE_BPS, EscrowError::FeeTooHigh);
         let c = &mut ctx.accounts.config;
         c.authority = ctx.accounts.authority.key();
-        c.pending_authority = Pubkey::default();
         c.arbitrator = arbitrator;
         c.treasury = treasury;
         c.fee_bps = fee_bps;
@@ -83,22 +82,26 @@ pub mod takeover_escrow {
 
     /// Nominate a successor to the config authority. Nothing changes until they accept.
     ///
-    /// Passing the default pubkey cancels a nomination that has not been accepted.
+    /// Fails if a nomination is already pending — withdraw it first. That is deliberate:
+    /// silently overwriting a nomination is how the wrong key ends up in charge.
     pub fn nominate_authority(ctx: Context<NominateAuthority>, new_authority: Pubkey) -> Result<()> {
-        let c = &mut ctx.accounts.config;
-        require_keys_neq!(new_authority, c.authority, EscrowError::AlreadyAuthority);
-        c.pending_authority = new_authority;
+        require_keys_neq!(new_authority, Pubkey::default(), EscrowError::NotNominated);
+        require_keys_neq!(new_authority, ctx.accounts.config.authority, EscrowError::AlreadyAuthority);
+        let p = &mut ctx.accounts.pending;
+        p.new_authority = new_authority;
+        p.bump = ctx.bumps.pending;
+        Ok(())
+    }
+
+    /// Withdraw a nomination that has not been accepted. Rent goes back to the authority.
+    pub fn cancel_nomination(_ctx: Context<CancelNomination>) -> Result<()> {
         Ok(())
     }
 
     /// Take up a nomination. Only the nominated key can call this, which is what proves
     /// the successor is reachable before the old authority loses its powers.
     pub fn accept_authority(ctx: Context<AcceptAuthority>) -> Result<()> {
-        let c = &mut ctx.accounts.config;
-        require_keys_neq!(c.pending_authority, Pubkey::default(), EscrowError::NoNomination);
-        require_keys_eq!(c.pending_authority, ctx.accounts.new_authority.key(), EscrowError::NotNominated);
-        c.authority = c.pending_authority;
-        c.pending_authority = Pubkey::default();
+        ctx.accounts.config.authority = ctx.accounts.pending.new_authority;
         Ok(())
     }
 
@@ -877,26 +880,45 @@ pub struct CloseListing<'info> {
 
 #[derive(Accounts)]
 pub struct NominateAuthority<'info> {
-    /// `realloc` grows a config account written before `pending_authority` existed. It is
-    /// a no-op once the account is already the right size.
-    #[account(
-        mut,
-        seeds = [b"config"],
-        bump = config.bump,
-        has_one = authority,
-        realloc = Config::SPACE,
-        realloc::payer = authority,
-        realloc::zero = false,
-    )]
+    #[account(seeds = [b"config"], bump = config.bump, has_one = authority)]
     pub config: Account<'info, Config>,
+    #[account(
+        init,
+        payer = authority,
+        space = PendingAuthority::SPACE,
+        seeds = [b"pending_authority"],
+        bump
+    )]
+    pub pending: Account<'info, PendingAuthority>,
     #[account(mut)]
     pub authority: Signer<'info>,
     pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
+pub struct CancelNomination<'info> {
+    #[account(seeds = [b"config"], bump = config.bump, has_one = authority)]
+    pub config: Account<'info, Config>,
+    #[account(mut, seeds = [b"pending_authority"], bump = pending.bump, close = authority)]
+    pub pending: Account<'info, PendingAuthority>,
+    #[account(mut)]
+    pub authority: Signer<'info>,
+}
+
+#[derive(Accounts)]
 pub struct AcceptAuthority<'info> {
     #[account(mut, seeds = [b"config"], bump = config.bump)]
     pub config: Account<'info, Config>,
+    /// Closed on acceptance: the nomination has served its purpose, and its rent goes to
+    /// the key that just took over.
+    #[account(
+        mut,
+        seeds = [b"pending_authority"],
+        bump = pending.bump,
+        has_one = new_authority @ EscrowError::NotNominated,
+        close = new_authority
+    )]
+    pub pending: Account<'info, PendingAuthority>,
+    #[account(mut)]
     pub new_authority: Signer<'info>,
 }

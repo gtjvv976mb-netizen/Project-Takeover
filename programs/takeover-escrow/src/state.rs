@@ -45,17 +45,31 @@ pub struct Config {
     /// Default fee for new listings, in basis points.
     pub fee_bps: u16,
     pub bump: u8,
-    /// Nominated successor, or default if there is none pending.
-    ///
-    /// Handover is two steps on purpose. `authority` is the only key that can ever
-    /// change the fee, the treasury or the arbitrator, and a one-step transfer typed
-    /// slightly wrong would hand it to an address nobody controls, freezing all three
-    /// for good. Making the successor sign proves the key exists before it takes over.
-    pub pending_authority: Pubkey,
 }
 
 impl Config {
-    pub const SPACE: usize = 8 + 32 + 32 + 32 + 2 + 1 + 32 + 16;
+    pub const SPACE: usize = 8 + 32 + 32 + 32 + 2 + 1 + 16;
+}
+
+/// A nomination waiting to be accepted.
+///
+/// Deliberately its own account rather than a field on `Config`. A pending handover is
+/// transient — it exists for minutes and then never again — and putting it in `Config`
+/// meant growing an account that was already deployed. That does not work: Anchor
+/// deserializes an account before it applies `realloc`, so the config could not be read
+/// in order to be grown, and could not be grown in order to be read.
+///
+/// As a separate PDA it needs no migration at all, and it disappears the moment the
+/// handover completes or is called off.
+#[account]
+pub struct PendingAuthority {
+    /// The key that may accept.
+    pub new_authority: Pubkey,
+    pub bump: u8,
+}
+
+impl PendingAuthority {
+    pub const SPACE: usize = 8 + 32 + 1 + 16;
 }
 
 #[account]

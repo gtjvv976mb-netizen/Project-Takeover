@@ -70,16 +70,19 @@ It is now a two-step handover, because a one-step transfer typed slightly wrong 
 the authority to an address nobody controls:
 
 ```bash
-# 1. the current authority nominates
-#    (passing the default pubkey cancels a nomination)
-nominate_authority <NEW_PUBKEY>
-
-# 2. the successor signs to accept, proving the key is reachable
-accept_authority
+node scripts/authority.mjs status
+node scripts/authority.mjs nominate <MULTISIG_PUBKEY>   # signed by the current authority
+node scripts/authority.mjs accept --keypair <PATH>      # signed by the successor
+node scripts/authority.mjs cancel                       # withdraw before acceptance
 ```
 
-Nothing changes until step 2. Until then the old authority keeps every power, and a
-bystander cannot seize a nomination meant for someone else.
+Nothing changes until the successor accepts. Until then the old authority keeps every
+power, a bystander cannot seize a nomination meant for someone else, and the nomination can
+be withdrawn. The pending nomination lives in its own PDA that exists only mid-handover,
+so no already-deployed account has to be migrated.
+
+Verified on devnet by handing the authority to a throwaway key and back again: the old key
+was refused the moment the successor accepted, and the successor was refused before it.
 
 ## Rotating the treasury or arbitrator
 

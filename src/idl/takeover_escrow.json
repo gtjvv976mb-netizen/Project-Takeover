@@ -44,8 +44,46 @@
           }
         },
         {
+          "name": "pending",
+          "docs": [
+            "Closed on acceptance: the nomination has served its purpose, and its rent goes to",
+            "the key that just took over."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  101,
+                  110,
+                  100,
+                  105,
+                  110,
+                  103,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
           "name": "new_authority",
-          "signer": true
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "pending"
+          ]
         }
       ],
       "args": []
@@ -328,6 +366,81 @@
           "name": "token_program",
           "optional": true,
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "cancel_nomination",
+      "docs": [
+        "Withdraw a nomination that has not been accepted. Rent goes back to the authority."
+      ],
+      "discriminator": [
+        95,
+        2,
+        136,
+        89,
+        181,
+        232,
+        153,
+        174
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "pending",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  101,
+                  110,
+                  100,
+                  105,
+                  110,
+                  103,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "config"
+          ]
         }
       ],
       "args": []
@@ -916,7 +1029,8 @@
       "docs": [
         "Nominate a successor to the config authority. Nothing changes until they accept.",
         "",
-        "Passing the default pubkey cancels a nomination that has not been accepted."
+        "Fails if a nomination is already pending — withdraw it first. That is deliberate:",
+        "silently overwriting a nomination is how the wrong key ends up in charge."
       ],
       "discriminator": [
         148,
@@ -931,11 +1045,6 @@
       "accounts": [
         {
           "name": "config",
-          "docs": [
-            "`realloc` grows a config account written before `pending_authority` existed. It is",
-            "a no-op once the account is already the right size."
-          ],
-          "writable": true,
           "pda": {
             "seeds": [
               {
@@ -947,6 +1056,36 @@
                   102,
                   105,
                   103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "pending",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  101,
+                  110,
+                  100,
+                  105,
+                  110,
+                  103,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
                 ]
               }
             ]
@@ -1336,6 +1475,19 @@
         73,
         229
       ]
+    },
+    {
+      "name": "PendingAuthority",
+      "discriminator": [
+        108,
+        91,
+        208,
+        174,
+        216,
+        189,
+        207,
+        93
+      ]
     }
   ],
   "errors": [
@@ -1537,18 +1689,6 @@
           {
             "name": "bump",
             "type": "u8"
-          },
-          {
-            "name": "pending_authority",
-            "docs": [
-              "Nominated successor, or default if there is none pending.",
-              "",
-              "Handover is two steps on purpose. `authority` is the only key that can ever",
-              "change the fee, the treasury or the arbitrator, and a one-step transfer typed",
-              "slightly wrong would hand it to an address nobody controls, freezing all three",
-              "for good. Making the successor sign proves the key exists before it takes over."
-            ],
-            "type": "pubkey"
           }
         ]
       }
@@ -1782,6 +1922,37 @@
           },
           {
             "name": "Cancelled"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PendingAuthority",
+      "docs": [
+        "A nomination waiting to be accepted.",
+        "",
+        "Deliberately its own account rather than a field on `Config`. A pending handover is",
+        "transient — it exists for minutes and then never again — and putting it in `Config`",
+        "meant growing an account that was already deployed. That does not work: Anchor",
+        "deserializes an account before it applies `realloc`, so the config could not be read",
+        "in order to be grown, and could not be grown in order to be read.",
+        "",
+        "As a separate PDA it needs no migration at all, and it disappears the moment the",
+        "handover completes or is called off."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "new_authority",
+            "docs": [
+              "The key that may accept."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
           }
         ]
       }

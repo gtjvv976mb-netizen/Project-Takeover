@@ -437,10 +437,16 @@ describe("the fee cannot be changed under a live deal", () => {
 describe("the config authority can be handed over, in two steps", () => {
   // Without this the authority set at initialize is permanent: it could never move to a
   // multisig, and losing it would freeze the fee, treasury and arbitrator for good.
+  // The nomination lives in its own PDA so that no already-deployed account has to grow.
+  let pendingPda: PublicKey;
+  before(() => {
+    pendingPda = PublicKey.findProgramAddressSync([Buffer.from("pending_authority")], program.programId)[0];
+  });
+
   it("refuses a nomination from anyone but the current authority", async () => {
     await expectFail(
       program.methods.nominateAuthority(stranger.publicKey)
-        .accounts({ config: configPda, authority: stranger.publicKey, systemProgram: SystemProgram.programId })
+        .accounts({ config: configPda, pending: pendingPda, authority: stranger.publicKey, systemProgram: SystemProgram.programId })
         .signers([stranger]).rpc(),
       "ConstraintHasOne",
     );
@@ -449,7 +455,7 @@ describe("the config authority can be handed over, in two steps", () => {
   it("will not nominate the key that already holds it", async () => {
     await expectFail(
       program.methods.nominateAuthority(admin.publicKey)
-        .accounts({ config: configPda, authority: admin.publicKey, systemProgram: SystemProgram.programId })
+        .accounts({ config: configPda, pending: pendingPda, authority: admin.publicKey, systemProgram: SystemProgram.programId })
         .signers([admin]).rpc(),
       "AlreadyAuthority",
     );
@@ -458,25 +464,26 @@ describe("the config authority can be handed over, in two steps", () => {
   it("refuses an acceptance when nobody was nominated", async () => {
     await expectFail(
       program.methods.acceptAuthority()
-        .accounts({ config: configPda, newAuthority: stranger.publicKey })
+        .accounts({ config: configPda, pending: pendingPda, newAuthority: stranger.publicKey })
         .signers([stranger]).rpc(),
-      "NoNomination",
+      "AccountNotInitialized",
     );
   });
 
   it("changes nothing until the successor accepts", async () => {
     await program.methods.nominateAuthority(successor.publicKey)
-      .accounts({ config: configPda, authority: admin.publicKey, systemProgram: SystemProgram.programId })
+      .accounts({ config: configPda, pending: pendingPda, authority: admin.publicKey, systemProgram: SystemProgram.programId })
       .signers([admin]).rpc();
     const c = await program.account.config.fetch(configPda);
     assert.equal(c.authority.toBase58(), admin.publicKey.toBase58(), "old authority still in charge");
-    assert.equal(c.pendingAuthority.toBase58(), successor.publicKey.toBase58());
+    const pend = await program.account.pendingAuthority.fetch(pendingPda);
+    assert.equal(pend.newAuthority.toBase58(), successor.publicKey.toBase58());
   });
 
   it("will not let a bystander seize someone else's nomination", async () => {
     await expectFail(
       program.methods.acceptAuthority()
-        .accounts({ config: configPda, newAuthority: stranger.publicKey })
+        .accounts({ config: configPda, pending: pendingPda, newAuthority: stranger.publicKey })
         .signers([stranger]).rpc(),
       "NotNominated",
     );
@@ -484,20 +491,35 @@ describe("the config authority can be handed over, in two steps", () => {
 
   it("hands over once the successor signs, and the old key loses its powers", async () => {
     await program.methods.acceptAuthority()
-      .accounts({ config: configPda, newAuthority: successor.publicKey })
+      .accounts({ config: configPda, pending: pendingPda, newAuthority: successor.publicKey })
       .signers([successor]).rpc();
     const c = await program.account.config.fetch(configPda);
     assert.equal(c.authority.toBase58(), successor.publicKey.toBase58());
-    assert.equal(c.pendingAuthority.toBase58(), PublicKey.default.toBase58(), "nomination cleared");
+    assert.equal(await ctx.banksClient.getAccount(pendingPda), null, "nomination account closed");
 
     await expectFail(
       program.methods.updateConfig(400, arbitrator.publicKey, treasury.publicKey)
         .accounts({ config: configPda, authority: admin.publicKey }).signers([admin]).rpc(),
       "ConstraintHasOne",
     );
-    // and the new one really does have them
     await program.methods.updateConfig(400, arbitrator.publicKey, treasury.publicKey)
       .accounts({ config: configPda, authority: successor.publicKey }).signers([successor]).rpc();
     assert.equal((await program.account.config.fetch(configPda)).feeBps, 400);
+  });
+
+  it("lets a nomination be withdrawn before it is taken up", async () => {
+    await program.methods.nominateAuthority(stranger.publicKey)
+      .accounts({ config: configPda, pending: pendingPda, authority: successor.publicKey, systemProgram: SystemProgram.programId })
+      .signers([successor]).rpc();
+    await program.methods.cancelNomination()
+      .accounts({ config: configPda, pending: pendingPda, authority: successor.publicKey })
+      .signers([successor]).rpc();
+    assert.equal(await ctx.banksClient.getAccount(pendingPda), null, "withdrawn");
+    await expectFail(
+      program.methods.acceptAuthority()
+        .accounts({ config: configPda, pending: pendingPda, newAuthority: stranger.publicKey })
+        .signers([stranger]).rpc(),
+      "AccountNotInitialized",
+    );
   });
 });
