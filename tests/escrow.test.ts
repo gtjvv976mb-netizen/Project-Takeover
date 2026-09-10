@@ -32,6 +32,7 @@ let ctx: ProgramTestContext;
 let provider: BankrunProvider;
 let program: Program<TakeoverEscrow>;
 let admin: Keypair, arbitrator: Keypair, treasury: Keypair, seller: Keypair, buyer: Keypair, stranger: Keypair, cranker: Keypair;
+let successor: Keypair;
 let configPda: PublicKey;
 
 const idBytes = (s: string) => {
@@ -107,6 +108,7 @@ async function expectFail(promise: Promise<unknown>, needle: string) {
 before(async () => {
   admin = Keypair.generate(); arbitrator = Keypair.generate(); treasury = Keypair.generate();
   seller = Keypair.generate(); buyer = Keypair.generate(); stranger = Keypair.generate(); cranker = Keypair.generate();
+  successor = Keypair.generate();
 
   ctx = await startAnchor(".", [], []);
   // The provider's own wallet (bankrun's funded payer) covers transaction fees.
@@ -114,7 +116,7 @@ before(async () => {
   provider = new BankrunProvider(ctx);
   program = new Program(idl as TakeoverEscrow, provider);
 
-  fundAccounts(admin, arbitrator, treasury, seller, buyer, stranger);
+  fundAccounts(admin, arbitrator, treasury, seller, buyer, stranger, successor);
 
   configPda = PublicKey.findProgramAddressSync([Buffer.from("config")], program.programId)[0];
   await program.methods
@@ -429,5 +431,73 @@ describe("the fee cannot be changed under a live deal", () => {
         .accounts({ config: configPda, authority: admin.publicKey }).signers([admin]).rpc(),
       "FeeTooHigh",
     );
+  });
+});
+
+describe("the config authority can be handed over, in two steps", () => {
+  // Without this the authority set at initialize is permanent: it could never move to a
+  // multisig, and losing it would freeze the fee, treasury and arbitrator for good.
+  it("refuses a nomination from anyone but the current authority", async () => {
+    await expectFail(
+      program.methods.nominateAuthority(stranger.publicKey)
+        .accounts({ config: configPda, authority: stranger.publicKey, systemProgram: SystemProgram.programId })
+        .signers([stranger]).rpc(),
+      "ConstraintHasOne",
+    );
+  });
+
+  it("will not nominate the key that already holds it", async () => {
+    await expectFail(
+      program.methods.nominateAuthority(admin.publicKey)
+        .accounts({ config: configPda, authority: admin.publicKey, systemProgram: SystemProgram.programId })
+        .signers([admin]).rpc(),
+      "AlreadyAuthority",
+    );
+  });
+
+  it("refuses an acceptance when nobody was nominated", async () => {
+    await expectFail(
+      program.methods.acceptAuthority()
+        .accounts({ config: configPda, newAuthority: stranger.publicKey })
+        .signers([stranger]).rpc(),
+      "NoNomination",
+    );
+  });
+
+  it("changes nothing until the successor accepts", async () => {
+    await program.methods.nominateAuthority(successor.publicKey)
+      .accounts({ config: configPda, authority: admin.publicKey, systemProgram: SystemProgram.programId })
+      .signers([admin]).rpc();
+    const c = await program.account.config.fetch(configPda);
+    assert.equal(c.authority.toBase58(), admin.publicKey.toBase58(), "old authority still in charge");
+    assert.equal(c.pendingAuthority.toBase58(), successor.publicKey.toBase58());
+  });
+
+  it("will not let a bystander seize someone else's nomination", async () => {
+    await expectFail(
+      program.methods.acceptAuthority()
+        .accounts({ config: configPda, newAuthority: stranger.publicKey })
+        .signers([stranger]).rpc(),
+      "NotNominated",
+    );
+  });
+
+  it("hands over once the successor signs, and the old key loses its powers", async () => {
+    await program.methods.acceptAuthority()
+      .accounts({ config: configPda, newAuthority: successor.publicKey })
+      .signers([successor]).rpc();
+    const c = await program.account.config.fetch(configPda);
+    assert.equal(c.authority.toBase58(), successor.publicKey.toBase58());
+    assert.equal(c.pendingAuthority.toBase58(), PublicKey.default.toBase58(), "nomination cleared");
+
+    await expectFail(
+      program.methods.updateConfig(400, arbitrator.publicKey, treasury.publicKey)
+        .accounts({ config: configPda, authority: admin.publicKey }).signers([admin]).rpc(),
+      "ConstraintHasOne",
+    );
+    // and the new one really does have them
+    await program.methods.updateConfig(400, arbitrator.publicKey, treasury.publicKey)
+      .accounts({ config: configPda, authority: successor.publicKey }).signers([successor]).rpc();
+    assert.equal((await program.account.config.fetch(configPda)).feeBps, 400);
   });
 });

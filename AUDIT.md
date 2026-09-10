@@ -26,6 +26,7 @@ Halborn. Expect roughly $15–50k and two to four weeks.
 | M-2 | Medium | `accept_offer` does not pin `token_metadata_program` | **Fixed** |
 | M-3 | Medium | `cancel` does not check the mint against the listing | **Fixed** |
 | M-4 | Medium | Arbitrator power is unbounded and untimed | Bounded by H-1's timeout; still a single key |
+| H-3 | High | The config authority could never be rotated | **Fixed** |
 | L-1 | Low | `close_listing` sweeps donated lamports to the seller | Open |
 | L-2 | Low | No events, so the index depends entirely on polling | Open |
 
@@ -257,6 +258,19 @@ includes it in the CPI, matching its sibling. `accept_offer` passes it through.
 
 All 36 tests across the three suites pass. Redeployed to devnet and the handover
 re-proved end to end afterwards.
+
+**H-3, found while acting on H-2.** `initialize` wrote `Config.authority` once and no
+instruction ever changed it. The key that ran setup was therefore the permanent owner of
+the fee, the treasury and the arbitrator: it could never be moved to a multisig, and if it
+were lost all three were frozen forever. This also made the mainnet plan in `KEYS.md`
+unachievable as written — "move the config authority to a multisig" was not a thing the
+program could do.
+
+Fixed with a two-step handover, `nominate_authority` then `accept_authority`, so the
+successor must sign before the old key loses anything. Six tests cover it, including that
+a bystander cannot seize a nomination and that the old authority really does lose its
+powers afterwards. Config grew a `pending_authority` field; the account reallocs on first
+nomination, so existing deployments migrate without intervention.
 
 **Still open: H-2.** It is a property of the deployment, not the code, and no commit can
 close it. One wallet remains upgrade authority, treasury and arbitrator.

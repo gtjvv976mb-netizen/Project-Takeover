@@ -61,6 +61,7 @@ pub mod takeover_escrow {
         require!(fee_bps <= MAX_FEE_BPS, EscrowError::FeeTooHigh);
         let c = &mut ctx.accounts.config;
         c.authority = ctx.accounts.authority.key();
+        c.pending_authority = Pubkey::default();
         c.arbitrator = arbitrator;
         c.treasury = treasury;
         c.fee_bps = fee_bps;
@@ -76,6 +77,28 @@ pub mod takeover_escrow {
         c.fee_bps = fee_bps;
         c.arbitrator = arbitrator;
         c.treasury = treasury;
+        Ok(())
+    }
+
+
+    /// Nominate a successor to the config authority. Nothing changes until they accept.
+    ///
+    /// Passing the default pubkey cancels a nomination that has not been accepted.
+    pub fn nominate_authority(ctx: Context<NominateAuthority>, new_authority: Pubkey) -> Result<()> {
+        let c = &mut ctx.accounts.config;
+        require_keys_neq!(new_authority, c.authority, EscrowError::AlreadyAuthority);
+        c.pending_authority = new_authority;
+        Ok(())
+    }
+
+    /// Take up a nomination. Only the nominated key can call this, which is what proves
+    /// the successor is reachable before the old authority loses its powers.
+    pub fn accept_authority(ctx: Context<AcceptAuthority>) -> Result<()> {
+        let c = &mut ctx.accounts.config;
+        require_keys_neq!(c.pending_authority, Pubkey::default(), EscrowError::NoNomination);
+        require_keys_eq!(c.pending_authority, ctx.accounts.new_authority.key(), EscrowError::NotNominated);
+        c.authority = c.pending_authority;
+        c.pending_authority = Pubkey::default();
         Ok(())
     }
 
@@ -850,4 +873,30 @@ pub struct CloseListing<'info> {
     pub listing: Account<'info, Listing>,
     #[account(mut)]
     pub seller: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct NominateAuthority<'info> {
+    /// `realloc` grows a config account written before `pending_authority` existed. It is
+    /// a no-op once the account is already the right size.
+    #[account(
+        mut,
+        seeds = [b"config"],
+        bump = config.bump,
+        has_one = authority,
+        realloc = Config::SPACE,
+        realloc::payer = authority,
+        realloc::zero = false,
+    )]
+    pub config: Account<'info, Config>,
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct AcceptAuthority<'info> {
+    #[account(mut, seeds = [b"config"], bump = config.bump)]
+    pub config: Account<'info, Config>,
+    pub new_authority: Signer<'info>,
 }

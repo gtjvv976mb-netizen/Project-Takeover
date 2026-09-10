@@ -13,7 +13,7 @@ mode 600.
 | Power | What it can do | What it cannot do | Devnet holder |
 |---|---|---|---|
 | **Upgrade authority** | Replace the program with anything at all | — | `F4SoR29…` ⚠️ |
-| **Config authority** | Rotate the treasury, arbitrator and fee | Exceed 5%. Touch a listing, a deal, or anyone's money | `F4SoR29…` ⚠️ |
+| **Config authority** | Rotate the treasury, arbitrator and fee, and hand itself over | Exceed 5%. Touch a listing, a deal, or anyone's money | `F4SoR29…` ⚠️ |
 | **Treasury** | Receive fees | Nothing else. It is only a destination | `DwjNBeS7…` |
 | **Arbitrator** | Pick a winner on a **disputed** deal | Touch an undisputed deal. Change a price. Redirect funds anywhere but to the buyer or the seller | `DtRSnE1D…` |
 
@@ -58,7 +58,30 @@ role on chain is enough — there is no env var to remember to update, and no wa
 two to disagree. That was not always true: the first version of this split desynced the
 site from the chain and would have made every purchase fail with `BadTreasury`.
 
-## Rotating a role
+## Handing over the config authority
+
+Until 2026-09-11 this was impossible. `initialize` wrote `authority` once and no
+instruction ever changed it, so the key that set up the program was the permanent owner of
+the fee, the treasury and the arbitrator — it could never move to a multisig, and losing it
+would have frozen all three for good. The "config authority — a multisig" step below was
+not achievable with the program as written.
+
+It is now a two-step handover, because a one-step transfer typed slightly wrong would hand
+the authority to an address nobody controls:
+
+```bash
+# 1. the current authority nominates
+#    (passing the default pubkey cancels a nomination)
+nominate_authority <NEW_PUBKEY>
+
+# 2. the successor signs to accept, proving the key is reachable
+accept_authority
+```
+
+Nothing changes until step 2. Until then the old authority keeps every power, and a
+bystander cannot seize a nomination meant for someone else.
+
+## Rotating the treasury or arbitrator
 
 ```bash
 RPC_URL=https://api.devnet.solana.com node scripts/init-program.mjs \
@@ -90,7 +113,7 @@ alone. A 2-of-3 Squads multisig means no single compromised laptop can rule a di
 **3. Config authority — a multisig.**
 
 It cannot steal, but it can point the treasury at an attacker's address and collect every
-future fee.
+future fee. Nominate the multisig, then accept from it.
 
 **4. Upgrade authority — the real decision.**
 
@@ -106,6 +129,11 @@ Two honest options, in descending order of how much they are worth:
 
 Doing neither, and shipping to mainnet with one laptop key able to replace the program, is
 not a middle path. It is the thing the site tells people is impossible.
+
+**What is deliberately not done here.** Moving the upgrade authority to a second key on the
+same laptop would look like progress and would not be any. An attacker with the disk gets
+both. The only changes that mean anything are a multisig or `--final`, and both need
+signatures this machine should not be able to produce alone.
 
 ## What users are trusting today
 

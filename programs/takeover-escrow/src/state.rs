@@ -45,10 +45,17 @@ pub struct Config {
     /// Default fee for new listings, in basis points.
     pub fee_bps: u16,
     pub bump: u8,
+    /// Nominated successor, or default if there is none pending.
+    ///
+    /// Handover is two steps on purpose. `authority` is the only key that can ever
+    /// change the fee, the treasury or the arbitrator, and a one-step transfer typed
+    /// slightly wrong would hand it to an address nobody controls, freezing all three
+    /// for good. Making the successor sign proves the key exists before it takes over.
+    pub pending_authority: Pubkey,
 }
 
 impl Config {
-    pub const SPACE: usize = 8 + 32 + 32 + 32 + 2 + 1 + 16;
+    pub const SPACE: usize = 8 + 32 + 32 + 32 + 2 + 1 + 32 + 16;
 }
 
 #[account]

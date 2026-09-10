@@ -60,4 +60,10 @@ pub enum EscrowError {
     SelfAccept,
     #[msg("Offer must last between 1 and 90 days")]
     BadOfferWindow,
+    #[msg("That key is already the authority")]
+    AlreadyAuthority,
+    #[msg("No successor has been nominated")]
+    NoNomination,
+    #[msg("Only the nominated successor may accept")]
+    NotNominated,
 }
