@@ -138,6 +138,19 @@ same laptop would look like progress and would not be any. An attacker with the 
 both. The only changes that mean anything are a multisig or `--final`, and both need
 signatures this machine should not be able to produce alone.
 
+**Decision, 2026-09-11: burn it after the audit, not before.** Four real defects were found
+and fixed in a single day — a dispute that froze a buyer's funds forever, a config
+authority that could never be rotated, a site that silently desynced from the on-chain
+treasury and broke every purchase, and a migration that could not deserialise its own
+account. A codebase discovering bugs at that rate is not one to freeze permanently. The
+sequence is audit, fix what they find, then `--final`.
+
+Until then the site says so itself, and says it from chain data rather than from prose: the
+"what you are still trusting" section on /how-it-works reads the ProgramData account and
+names whoever currently holds the upgrade authority. The day it is burned, that paragraph
+changes on its own to say the program is immutable. Nobody has to remember to update the
+copy, and nobody has to take our word for the current state.
+
 ## What users are trusting today
 
 Worth being able to say out loud, because a marketplace built on "don't trust us" should

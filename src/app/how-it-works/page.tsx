@@ -1,5 +1,5 @@
 "use client";
-import { useConfig } from "@/components/ConfigContext";
+import { explorerUrl, useConfig } from "@/components/ConfigContext";
 import Link from "next/link";
 
 const FLOWS = [
@@ -126,7 +126,27 @@ export default function HowItWorks() {
             <div className="rounded-2xl border p-6" style={{ borderColor: "color-mix(in srgb, var(--color-amber) 40%, transparent)", background: "color-mix(in srgb, var(--color-amber) 7%, var(--color-tint-base))" }}>
               <h3 className="text-[17px] font-bold text-ink">You are still trusting</h3>
               <ul className="mt-3 space-y-2.5 text-[14.5px] leading-relaxed text-muted">
-                <li><strong className="text-ink">That the program is not replaced.</strong> It can still be upgraded. Until that authority is burned or moved to a multisig, whoever holds it could deploy something that does hold your funds.</li>
+                <li>
+                  {cfg.upgradeAuthority ? (
+                    <>
+                      <strong className="text-ink">That the program is not replaced.</strong> It can still be
+                      upgraded, right now, by{" "}
+                      <a className="mono break-all text-blue hover:underline" href={explorerUrl(cfg, "address", cfg.upgradeAuthority)} target="_blank" rel="noreferrer">
+                        {cfg.upgradeAuthority}
+                      </a>
+                      . Whoever holds that key could deploy a version that does hold your funds. It is
+                      scheduled to be handed to a multisig or destroyed outright once the program has
+                      been audited — and this line is read from the chain, so it will say so when that
+                      happens rather than waiting for someone to update the copy.
+                    </>
+                  ) : (
+                    <>
+                      <strong className="text-ink">Nothing, on this point any more.</strong> The program has
+                      been made immutable: nobody can replace it, including us. Verify with{" "}
+                      <span className="mono">solana program show {cfg.programId}</span>.
+                    </>
+                  )}
+                </li>
                 <li><strong className="text-ink">The arbitrator, on disputes.</strong> It can only choose between the buyer and the seller — it cannot pay itself or a third party — and if it stays silent for 14 days the buyer simply takes their money back.</li>
                 <li><strong className="text-ink">The seller, for anything off-chain.</strong> A repo, a domain, a Discord: no blockchain can verify delivery. Your money is held until you confirm, and refunded if the deadline passes, but the handover itself is a human one.</li>
               </ul>

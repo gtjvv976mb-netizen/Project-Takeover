@@ -148,6 +148,15 @@ export interface AppConfig {
   tokenSymbol: string | null;
   feeBps: number;
   appName: string;
+  /**
+   * Who can replace the escrow program, or null once nobody can.
+   *
+   * The site's central claim is that no human can move an escrowed asset. That is true of
+   * the escrow itself, and it stays true only while the code is not swapped underneath it,
+   * so whoever holds this is worth stating rather than leaving for a reader to discover.
+   * Null means the program has been made immutable and the claim is unconditional.
+   */
+  upgradeAuthority: string | null;
 }
 
 export interface SignedRequest {

@@ -49,7 +49,29 @@ export function appConfig(): AppConfig {
     treasury: TREASURY.toBase58(),
     feeBps: FEE_BPS,
     appName: APP_NAME,
+    upgradeAuthority: null,
   };
+}
+
+/** The loader that owns every upgradeable program's ProgramData account. */
+const BPF_UPGRADEABLE_LOADER = new PublicKey("BPFLoaderUpgradeab1e11111111111111111111111");
+
+/**
+ * Read who may replace the escrow program.
+ *
+ * Returns null when the program is immutable — either because it was finalised, or
+ * because it was deployed with a loader that has no upgrade path at all. Both mean the
+ * same thing to a user: nobody can swap the code.
+ *
+ * ProgramData layout: 4-byte enum tag (3), 8-byte deploy slot, then Option<Pubkey> as a
+ * 1-byte discriminant followed by 32 bytes.
+ */
+async function upgradeAuthority(): Promise<string | null> {
+  const [programData] = PublicKey.findProgramAddressSync([PROGRAM_ID.toBuffer()], BPF_UPGRADEABLE_LOADER);
+  const info = await connection().getAccountInfo(programData, "confirmed");
+  if (!info || info.data.length < 45) return null;
+  const hasAuthority = info.data[12] === 1;
+  return hasAuthority ? new PublicKey(info.data.subarray(13, 45)).toBase58() : null;
 }
 
 /**
@@ -71,12 +93,15 @@ export async function chainConfig(): Promise<AppConfig> {
   const base = appConfig();
   if (cached && Date.now() - cached.at < 30_000) return cached.cfg;
   try {
-    const info = await connection().getAccountInfo(configPda(), "confirmed");
+    const [info, upgrader] = await Promise.all([
+      connection().getAccountInfo(configPda(), "confirmed"),
+      upgradeAuthority().catch(() => null),
+    ]);
     if (info) {
       // discriminator(8) authority(32) arbitrator(32) treasury(32) fee_bps(2)
       const treasury = new PublicKey(info.data.subarray(72, 104)).toBase58();
       const feeBps = info.data.readUInt16LE(104);
-      const cfg = { ...base, treasury, feeBps };
+      const cfg = { ...base, treasury, feeBps, upgradeAuthority: upgrader };
       cached = { at: Date.now(), cfg };
       return cfg;
     }
