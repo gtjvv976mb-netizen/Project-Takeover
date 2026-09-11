@@ -12,22 +12,51 @@ import type { AppConfig, AuthorityKind, TokenInfo } from "./types";
 import { PROGRAM_ID, configPda } from "./program";
 import { bondingCurvePda, metadataPda, parseBondingCurve, parseMetadata, priceFromCurve } from "./solana-shared";
 
-export const NETWORK = (process.env.SOLANA_NETWORK ?? "devnet") as AppConfig["network"];
-/** Server-side RPC. May carry an API key; never sent to the browser. */
-export const RPC_URL = process.env.RPC_URL ?? process.env.NEXT_PUBLIC_RPC_URL ?? `https://api.${NETWORK}.solana.com`;
-/** Endpoint handed to wallets in the browser. Keep this one keyless / CORS-open. */
-export const BROWSER_RPC_URL = process.env.NEXT_PUBLIC_RPC_URL ?? `https://api.${NETWORK}.solana.com`;
-/** Fallback only. The program's own config is authoritative — see `chainConfig()`. */
-export const FEE_BPS = Number(process.env.FEE_BPS ?? 500); // 5%, the program's hard ceiling
-/** Fallback only, same reason. Public: it never signs anything on this server. */
-export const TREASURY = new PublicKey(process.env.TREASURY_PUBKEY ?? "11111111111111111111111111111111");
-/** Roughly the SOL a pump.fun curve holds at graduation. Configurable: it has changed. */
-export const GRADUATION_SOL = Number(process.env.PUMP_GRADUATION_SOL ?? 85);
-/** This project's own pump.fun coin. Everything token-related hides until it is set. */
-export const TOKEN_MINT = process.env.NEXT_PUBLIC_TOKEN_MINT?.trim() || null;
-export const TOKEN_SYMBOL = process.env.NEXT_PUBLIC_TOKEN_SYMBOL?.trim() || null;
+/**
+ * Read an environment variable, treating blank as absent.
+ *
+ * `??` only falls back on undefined, so an empty string sails straight through it and into
+ * whatever parses the value next. `new Connection("")`, `new PublicKey("")` and
+ * `new URL("")` all throw, and because these are module-level constants the throw happens
+ * at import time: the process never starts and every request 502s. Render hands out empty
+ * strings readily — a `sync: false` blueprint var with nothing set in the dashboard is one
+ * way — so no deployment mistake should be able to take the whole site down.
+ */
+function env(name: string): string | undefined {
+  const v = process.env[name]?.trim();
+  return v ? v : undefined;
+}
 
-export const APP_NAME = process.env.APP_NAME ?? process.env.NEXT_PUBLIC_APP_NAME ?? "Project: Takeover";
+/** Fall back rather than throw. A bad address costs a feature; a throw costs the site. */
+function pubkeyOr(value: string | undefined, fallback: string): PublicKey {
+  try {
+    return new PublicKey(value ?? fallback);
+  } catch {
+    return new PublicKey(fallback);
+  }
+}
+
+const httpOr = (value: string | undefined, fallback: string) =>
+  value && /^https?:\/\//i.test(value) ? value : fallback;
+
+export const NETWORK = (env("SOLANA_NETWORK") ?? "devnet") as AppConfig["network"];
+/** Server-side RPC. May carry an API key; never sent to the browser. */
+export const RPC_URL = httpOr(env("RPC_URL") ?? env("NEXT_PUBLIC_RPC_URL"), `https://api.${NETWORK}.solana.com`);
+/** Endpoint handed to wallets in the browser. Keep this one keyless / CORS-open. */
+export const BROWSER_RPC_URL = httpOr(env("NEXT_PUBLIC_RPC_URL"), `https://api.${NETWORK}.solana.com`);
+/** Fallback only. The program's own config is authoritative — see `chainConfig()`. */
+const feeRaw = Number(env("FEE_BPS") ?? 500);
+export const FEE_BPS = Number.isFinite(feeRaw) && feeRaw >= 0 ? feeRaw : 500; // 5%, the program's hard ceiling
+/** Fallback only, same reason. Public: it never signs anything on this server. */
+export const TREASURY = pubkeyOr(env("TREASURY_PUBKEY"), "11111111111111111111111111111111");
+/** Roughly the SOL a pump.fun curve holds at graduation. Configurable: it has changed. */
+const gradRaw = Number(env("PUMP_GRADUATION_SOL") ?? 85);
+export const GRADUATION_SOL = Number.isFinite(gradRaw) && gradRaw > 0 ? gradRaw : 85;
+/** This project's own pump.fun coin. Everything token-related hides until it is set. */
+export const TOKEN_MINT = env("NEXT_PUBLIC_TOKEN_MINT") ?? null;
+export const TOKEN_SYMBOL = env("NEXT_PUBLIC_TOKEN_SYMBOL") ?? null;
+
+export const APP_NAME = env("APP_NAME") ?? env("NEXT_PUBLIC_APP_NAME") ?? "Project: Takeover";
 
 declare global {
   var __takeoverConn: Connection | undefined;

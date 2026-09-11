@@ -19,7 +19,10 @@ export const viewport = {
   ],
 };
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://project-takeover.com";
+// Blank or scheme-less values make `new URL` throw, and this runs at import time, so a
+// mistyped variable would stop the site booting rather than just spoiling a link preview.
+const rawSite = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+const SITE_URL = rawSite && /^https?:\/\//i.test(rawSite) ? rawSite : "https://project-takeover.com";
 const TITLE = "Project: Takeover — think you'd run it better? Buy it.";
 const DESCRIPTION =
   "Buy Solana projects outright, not by the bag. Memecoin authorities, pump.fun coin ownership, whole sites and communities — handed over on chain, with nobody holding the money but the code. Built something? Sell it.";
