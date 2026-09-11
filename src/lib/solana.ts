@@ -7,7 +7,7 @@ import "server-only";
 import {
   Connection, PublicKey,
 } from "@solana/web3.js";
-import { getMint, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID } from "@solana/spl-token";
+import { unpackMint, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID } from "@solana/spl-token";
 import type { AppConfig, AuthorityKind, TokenInfo } from "./types";
 import { PROGRAM_ID, configPda } from "./program";
 import { bondingCurvePda, metadataPda, parseBondingCurve, parseMetadata, priceFromCurve } from "./solana-shared";
@@ -117,19 +117,38 @@ export function feeFor(priceLamports: number): number {
 
 // ---------- token inspection ----------
 
-async function tokenProgramFor(mint: PublicKey): Promise<PublicKey> {
-  const info = await connection().getAccountInfo(mint);
-  if (!info) throw new Error("Mint account not found");
-  if (info.owner.equals(TOKEN_2022_PROGRAM_ID)) return TOKEN_2022_PROGRAM_ID;
-  if (info.owner.equals(TOKEN_PROGRAM_ID)) return TOKEN_PROGRAM_ID;
+/**
+ * Give up on a slow extra rather than let it hold the page hostage.
+ *
+ * Everything this guards is decoration — the holder distribution, an off-chain image. The
+ * page is worth serving without them, and public devnet will happily spend eight seconds
+ * in 429 backoff on a single call if allowed to.
+ */
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | null> {
+  return Promise.race([
+    promise.catch(() => null),
+    new Promise<null>((r) => setTimeout(() => r(null), ms)),
+  ]);
+}
+
+function tokenProgramOf(owner: PublicKey): PublicKey {
+  if (owner.equals(TOKEN_2022_PROGRAM_ID)) return TOKEN_2022_PROGRAM_ID;
+  if (owner.equals(TOKEN_PROGRAM_ID)) return TOKEN_PROGRAM_ID;
   throw new Error("Account is not an SPL token mint");
 }
 
 export async function fetchTokenInfo(mintStr: string): Promise<TokenInfo> {
   const mint = new PublicKey(mintStr);
   const conn = connection();
-  const program = await tokenProgramFor(mint);
-  const m = await getMint(conn, mint, "confirmed", program);
+
+  // One fetch of the mint account, not two. `tokenProgramFor` read it to learn the owning
+  // program and `getMint` then read the identical account again to parse it; unpacking the
+  // bytes we already have saves a round trip on every token page.
+  const mintInfo = await conn.getAccountInfo(mint, "confirmed");
+  if (!mintInfo) throw new Error("Mint account not found");
+  const program = tokenProgramOf(mintInfo.owner);
+  const m = unpackMint(mint, mintInfo, program);
+
   const info: TokenInfo = {
     mint: mintStr,
     decimals: m.decimals,
@@ -139,6 +158,13 @@ export async function fetchTokenInfo(mintStr: string): Promise<TokenInfo> {
     updateAuthority: null,
     pump: null,
   };
+
+  // Started now and awaited at the very end, so it overlaps the metadata read and the
+  // off-chain image fetch instead of running after them. On public devnet this single call
+  // spends eight seconds in rate-limit backoff, which is why it is also time-boxed: a
+  // missing holder table is a far smaller problem than a page nobody waits for.
+  const largestPromise = withTimeout(conn.getTokenLargestAccounts(mint), 2500);
+
   const [meta, curve] = await conn.getMultipleAccountsInfo([metadataPda(mint), bondingCurvePda(mint)]);
   if (meta) {
     const p = parseMetadata(meta.data);
@@ -146,7 +172,7 @@ export async function fetchTokenInfo(mintStr: string): Promise<TokenInfo> {
     info.name = p.name; info.symbol = p.symbol; info.uri = p.uri;
     if (p.uri) {
       try {
-        const res = await fetch(p.uri, { signal: AbortSignal.timeout(4000) });
+        const res = await fetch(p.uri, { signal: AbortSignal.timeout(2500) });
         const j = (await res.json()) as {
           image?: string; name?: string; symbol?: string; description?: string;
           twitter?: string; telegram?: string; website?: string;
@@ -179,13 +205,16 @@ export async function fetchTokenInfo(mintStr: string): Promise<TokenInfo> {
       progress: solRaised !== null ? Math.min(1, solRaised / GRADUATION_SOL) : null,
     };
   }
-  try {
-    const largest = await conn.getTokenLargestAccounts(mint);
+  const largest = await largestPromise;
+  if (largest) {
     const top = largest.value.map((a) => ({ address: a.address.toBase58(), amount: a.amount }));
     const supply = Number(m.supply);
     const top10 = top.slice(0, 10).reduce((acc, a) => acc + Number(a.amount), 0);
     info.holders = { top, top10Share: supply > 0 ? top10 / supply : 0 };
-  } catch { info.holders = null; }
+  } else {
+    // Timed out or rate-limited. The page renders; the holder table simply says nothing.
+    info.holders = null;
+  }
   return info;
 }
 
