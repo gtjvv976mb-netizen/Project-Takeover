@@ -66,4 +66,6 @@ pub enum EscrowError {
     NoNomination,
     #[msg("Only the nominated successor may accept")]
     NotNominated,
+    #[msg("This offer is still open")]
+    OfferStillOpen,
 }

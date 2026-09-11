@@ -28,7 +28,8 @@ Halborn. Expect roughly $15–50k and two to four weeks.
 | M-4 | Medium | Arbitrator power is unbounded and untimed | Bounded by H-1's timeout; still a single key |
 | H-3 | High | The config authority could never be rotated | **Fixed** |
 | L-1 | Low | `close_listing` sweeps donated lamports to the seller | Open |
-| L-2 | Low | No events, so the index depends entirely on polling | Open |
+| L-2 | Low→High on mainnet | No events, so the index depends entirely on polling | **Fixed** |
+| M-5 | Medium | Offer accounts could never be closed; rent was stranded | **Fixed** |
 
 ---
 
@@ -294,3 +295,34 @@ nomination, so existing deployments migrate without intervention.
 
 **Still open: H-2.** It is a property of the deployment, not the code, and no commit can
 close it. One wallet remains upgrade authority, treasury and arbitrator.
+
+---
+
+## Second pass, for mainnet — 2026-09-11
+
+Reviewed again asking a different question: not "is this correct" but "what does this do
+when it holds real money". Two findings.
+
+**M-5 · Offer rent was stranded permanently.** `close_listing` existed; `close_offer` did
+not. Every accepted or cancelled offer therefore kept its rent forever — the buyer's own
+money, about 0.0016 SOL each at mainnet rates, on every offer anyone ever made. Invisible
+on devnet, where rent is free; a thousand offers is more than a SOL of other people's
+funds quietly burnt.
+
+`close_offer` takes no signer and always returns the rent to the buyer, so a passer-by can
+tidy up an expired offer without its owner coming back. There is nothing to gain by
+calling it on someone else's behalf, which is what makes that safe.
+
+**L-2 · No events, which is a low finding on devnet and a blocker on mainnet.** The
+program emitted nothing, so the only way to discover an offer was `getProgramAccounts` —
+the one call mainnet providers throttle hardest and several disable outright. It works
+with a handful of accounts and stops working exactly when the market succeeds.
+
+Eleven events now cover every state change that moves money or ownership: created,
+escrowed, bought, funded, settled, refunded, cancelled, disputed, and the three offer
+transitions. A webhook, a geyser plugin or a plain log subscription can rebuild the whole
+market from the stream. Verified against a real devnet sale — the buy transaction emits
+ListingBought carrying listing, buyer, seller, mint, price, fee and authorities.
+
+Added before mainnet deliberately: once the upgrade authority is burned, events cannot be
+added at all, and the decision to burn it is supposed to come right after the audit.

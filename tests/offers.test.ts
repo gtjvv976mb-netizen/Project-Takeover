@@ -238,3 +238,52 @@ describe("expiry", () => {
     );
   });
 });
+
+describe("a finished offer gives the buyer their rent back", () => {
+  // Listings could always be closed and offers could not, so every accepted or cancelled
+  // offer kept its rent forever — the buyer's own money. Roughly 0.0016 SOL each on
+  // mainnet, silently, on every offer anyone ever made.
+  //
+  // Two offers rather than one: close_offer takes no signer, so two attempts against the
+  // same account would serialise to the same transaction, and bankrun rejects a repeat as
+  // already processed before the program ever runs.
+  const openId = idBytes("offer-rent-a");
+  const doneId = idBytes("offer-rent-b");
+  let stillOpen: PublicKey, finished: PublicKey;
+
+  before(async () => {
+    const mint = await newMint();
+    stillOpen = offerPda(bidder.publicKey, openId);
+    finished = offerPda(bidder.publicKey, doneId);
+    for (const [id, pda] of [[openId, stillOpen], [doneId, finished]] as const) {
+      await program.methods.makeOffer(id as number[], new BN(LAMPORTS_PER_SOL), 1, 7)
+        .accounts({ config: configPda, offer: pda, buyer: bidder.publicKey, mint, systemProgram: SystemProgram.programId })
+        .signers([bidder]).rpc();
+    }
+  });
+
+  it("refuses while the offer is still open and holding money", async () => {
+    await expectFail(
+      program.methods.closeOffer().accounts({ offer: stillOpen, buyer: bidder.publicKey }).rpc(),
+      "OfferStillOpen",
+    );
+  });
+
+  it("returns the rent once the offer is withdrawn", async () => {
+    await program.methods.cancelOffer()
+      .accounts({ offer: finished, signer: bidder.publicKey, buyer: bidder.publicKey })
+      .signers([bidder]).rpc();
+
+    const rent = await ctx.banksClient.getBalance(finished);
+    assert.ok(rent > 0n, "the account still holds its rent before closing");
+
+    const before = await ctx.banksClient.getBalance(bidder.publicKey);
+    // No signer: giving somebody their own rent back needs nobody's permission, which is
+    // what lets a passer-by tidy up an expired offer.
+    await program.methods.closeOffer().accounts({ offer: finished, buyer: bidder.publicKey }).rpc();
+    const after = await ctx.banksClient.getBalance(bidder.publicKey);
+
+    assert.equal(await ctx.banksClient.getAccount(finished), null, "offer account is gone");
+    assert.equal(after - before, rent, "every lamport of rent went back to the bidder");
+  });
+});

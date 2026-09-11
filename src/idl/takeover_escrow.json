@@ -562,6 +562,72 @@
       "args": []
     },
     {
+      "name": "close_offer",
+      "docs": [
+        "Reclaim the rent from an offer that is finished with.",
+        "",
+        "Listings could always be closed and offers could not, so every accepted or",
+        "cancelled offer left its rent stranded forever — the buyer's own money, quietly",
+        "kept. Invisible on devnet; on mainnet a thousand offers is more than a SOL of other",
+        "people's funds burnt for nothing.",
+        "",
+        "Anyone may call this and the rent always goes to the buyer, so an expired offer can",
+        "be tidied up by a passer-by without its owner having to come back. There is nothing",
+        "to gain by calling it on someone else's behalf, which is the point."
+      ],
+      "discriminator": [
+        191,
+        72,
+        67,
+        35,
+        239,
+        209,
+        97,
+        132
+      ],
+      "accounts": [
+        {
+          "name": "offer",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "offer.buyer",
+                "account": "Offer"
+              },
+              {
+                "kind": "account",
+                "path": "offer.offer_id",
+                "account": "Offer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "buyer",
+          "docs": [
+            "returning someone their own rent needs no permission from them."
+          ],
+          "writable": true,
+          "relations": [
+            "offer"
+          ]
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "create_listing",
       "docs": [
         "Open a listing. Token listings start as `Draft` and only become purchasable once",
@@ -1490,6 +1556,151 @@
       ]
     }
   ],
+  "events": [
+    {
+      "name": "AuthorityEscrowed",
+      "discriminator": [
+        80,
+        99,
+        158,
+        10,
+        89,
+        195,
+        51,
+        3
+      ]
+    },
+    {
+      "name": "ListingBought",
+      "discriminator": [
+        83,
+        222,
+        189,
+        68,
+        33,
+        133,
+        249,
+        22
+      ]
+    },
+    {
+      "name": "ListingCancelled",
+      "discriminator": [
+        11,
+        46,
+        163,
+        10,
+        103,
+        80,
+        139,
+        194
+      ]
+    },
+    {
+      "name": "ListingCreated",
+      "discriminator": [
+        94,
+        164,
+        167,
+        255,
+        246,
+        186,
+        12,
+        96
+      ]
+    },
+    {
+      "name": "ListingDisputed",
+      "discriminator": [
+        108,
+        50,
+        101,
+        151,
+        53,
+        130,
+        92,
+        181
+      ]
+    },
+    {
+      "name": "ListingFunded",
+      "discriminator": [
+        108,
+        146,
+        132,
+        198,
+        131,
+        137,
+        99,
+        183
+      ]
+    },
+    {
+      "name": "ListingRefunded",
+      "discriminator": [
+        227,
+        99,
+        251,
+        254,
+        7,
+        110,
+        230,
+        255
+      ]
+    },
+    {
+      "name": "ListingSettled",
+      "discriminator": [
+        160,
+        199,
+        158,
+        115,
+        172,
+        155,
+        237,
+        111
+      ]
+    },
+    {
+      "name": "OfferAccepted",
+      "discriminator": [
+        81,
+        238,
+        238,
+        115,
+        140,
+        18,
+        8,
+        20
+      ]
+    },
+    {
+      "name": "OfferCancelled",
+      "discriminator": [
+        45,
+        42,
+        175,
+        214,
+        51,
+        192,
+        154,
+        9
+      ]
+    },
+    {
+      "name": "OfferMade",
+      "discriminator": [
+        11,
+        5,
+        86,
+        210,
+        3,
+        4,
+        25,
+        154
+      ]
+    }
+  ],
   "errors": [
     {
       "code": 6000,
@@ -1650,9 +1861,48 @@
       "code": 6031,
       "name": "NotNominated",
       "msg": "Only the nominated successor may accept"
+    },
+    {
+      "code": 6032,
+      "name": "OfferStillOpen",
+      "msg": "This offer is still open"
     }
   ],
   "types": [
+    {
+      "name": "AuthorityEscrowed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "listing",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "which",
+            "docs": [
+              "Which authority moved, and everything now held, as bit flags."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "escrowed",
+            "type": "u8"
+          },
+          {
+            "name": "live",
+            "docs": [
+              "True once every promised authority is in custody and the listing is purchasable."
+            ],
+            "type": "bool"
+          }
+        ]
+      }
+    },
     {
       "name": "Config",
       "type": {
@@ -1827,6 +2077,200 @@
       }
     },
     {
+      "name": "ListingBought",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "listing",
+            "type": "pubkey"
+          },
+          {
+            "name": "buyer",
+            "type": "pubkey"
+          },
+          {
+            "name": "seller",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "price",
+            "type": "u64"
+          },
+          {
+            "name": "fee",
+            "type": "u64"
+          },
+          {
+            "name": "authorities",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ListingCancelled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "listing",
+            "type": "pubkey"
+          },
+          {
+            "name": "seller",
+            "type": "pubkey"
+          },
+          {
+            "name": "returned",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ListingCreated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "listing",
+            "type": "pubkey"
+          },
+          {
+            "name": "seller",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "price",
+            "type": "u64"
+          },
+          {
+            "name": "kind",
+            "type": "u8"
+          },
+          {
+            "name": "authorities",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ListingDisputed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "listing",
+            "type": "pubkey"
+          },
+          {
+            "name": "by",
+            "type": "pubkey"
+          },
+          {
+            "name": "at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ListingFunded",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "listing",
+            "type": "pubkey"
+          },
+          {
+            "name": "buyer",
+            "type": "pubkey"
+          },
+          {
+            "name": "price",
+            "type": "u64"
+          },
+          {
+            "name": "deadline",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ListingRefunded",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "listing",
+            "type": "pubkey"
+          },
+          {
+            "name": "buyer",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "after_abandoned_dispute",
+            "docs": [
+              "True when the refund came from an arbitration that was never answered."
+            ],
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ListingSettled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "listing",
+            "type": "pubkey"
+          },
+          {
+            "name": "seller",
+            "type": "pubkey"
+          },
+          {
+            "name": "buyer",
+            "type": "pubkey"
+          },
+          {
+            "name": "seller_take",
+            "type": "u64"
+          },
+          {
+            "name": "fee",
+            "type": "u64"
+          },
+          {
+            "name": "arbitrated",
+            "docs": [
+              "True when an arbitrator decided it rather than the buyer releasing."
+            ],
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
       "name": "Offer",
       "docs": [
         "An unsolicited, funded bid on a token nobody has listed.",
@@ -1905,6 +2349,97 @@
           {
             "name": "bump",
             "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "OfferAccepted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "offer",
+            "type": "pubkey"
+          },
+          {
+            "name": "seller",
+            "type": "pubkey"
+          },
+          {
+            "name": "buyer",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "price",
+            "type": "u64"
+          },
+          {
+            "name": "fee",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "OfferCancelled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "offer",
+            "type": "pubkey"
+          },
+          {
+            "name": "buyer",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "expired",
+            "docs": [
+              "True when a passer-by cleaned up an expired offer rather than the buyer withdrawing."
+            ],
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "OfferMade",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "offer",
+            "type": "pubkey"
+          },
+          {
+            "name": "buyer",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "price",
+            "type": "u64"
+          },
+          {
+            "name": "authorities",
+            "type": "u8"
+          },
+          {
+            "name": "expiry",
+            "type": "i64"
           }
         ]
       }

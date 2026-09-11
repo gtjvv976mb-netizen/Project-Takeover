@@ -157,6 +157,14 @@ pub mod takeover_escrow {
                 l.status = Status::Active;
             }
         }
+        emit!(ListingCreated {
+            listing: l.key(),
+            seller: l.seller,
+            mint: l.mint,
+            price: l.price,
+            kind: kind as u8,
+            authorities: l.authorities,
+        });
         Ok(())
     }
 
@@ -206,6 +214,13 @@ pub mod takeover_escrow {
         if l.escrowed == l.authorities {
             l.status = Status::Active;
         }
+        emit!(AuthorityEscrowed {
+            listing: listing_key,
+            mint: l.mint,
+            which,
+            escrowed: l.escrowed,
+            live: l.status == Status::Active,
+        });
         Ok(())
     }
 
@@ -256,6 +271,15 @@ pub mod takeover_escrow {
         let l = &mut ctx.accounts.listing;
         l.buyer = ctx.accounts.buyer.key();
         l.status = Status::Completed;
+        emit!(ListingBought {
+            listing: l.key(),
+            buyer: l.buyer,
+            seller: seller_key,
+            mint: l.mint,
+            price: l.price,
+            fee,
+            authorities: escrowed,
+        });
         Ok(())
     }
 
@@ -285,6 +309,7 @@ pub mod takeover_escrow {
             .checked_add((l.delivery_days as i64).checked_mul(SECONDS_PER_DAY).ok_or(EscrowError::MathOverflow)?)
             .ok_or(EscrowError::MathOverflow)?;
         l.status = Status::Funded;
+        emit!(ListingFunded { listing: l.key(), buyer: l.buyer, price, deadline: l.deadline });
         Ok(())
     }
 
@@ -333,6 +358,7 @@ pub mod takeover_escrow {
         require!(who == l.buyer || who == l.seller, EscrowError::NotBuyer);
         l.disputed_at = Clock::get()?.unix_timestamp;
         l.status = Status::Disputed;
+        emit!(ListingDisputed { listing: l.key(), by: who, at: l.disputed_at });
         Ok(())
     }
 
@@ -376,6 +402,7 @@ pub mod takeover_escrow {
         let l = &mut ctx.accounts.listing;
         l.escrowed = 0;
         l.status = Status::Cancelled;
+        emit!(ListingCancelled { listing: l.key(), seller: seller_key, returned: escrowed });
         Ok(())
     }
 
@@ -411,6 +438,15 @@ pub mod takeover_escrow {
         o.authorities = authorities & AUTH_ALL;
         o.status = OfferStatus::Open;
         o.bump = ctx.bumps.offer;
+
+        emit!(OfferMade {
+            offer: o.key(),
+            buyer: o.buyer,
+            mint: o.mint,
+            price,
+            authorities: o.authorities,
+            expiry: o.expiry,
+        });
 
         pay_from_signer(
             &ctx.accounts.buyer,
@@ -457,6 +493,35 @@ pub mod takeover_escrow {
         let o = &mut ctx.accounts.offer;
         o.escrowed_lamports = 0;
         o.status = OfferStatus::Accepted;
+        emit!(OfferAccepted {
+            offer: o.key(),
+            seller: ctx.accounts.seller.key(),
+            buyer: o.buyer,
+            mint: o.mint,
+            price: o.price,
+            fee,
+        });
+        Ok(())
+    }
+
+    /// Reclaim the rent from an offer that is finished with.
+    ///
+    /// Listings could always be closed and offers could not, so every accepted or
+    /// cancelled offer left its rent stranded forever — the buyer's own money, quietly
+    /// kept. Invisible on devnet; on mainnet a thousand offers is more than a SOL of other
+    /// people's funds burnt for nothing.
+    ///
+    /// Anyone may call this and the rent always goes to the buyer, so an expired offer can
+    /// be tidied up by a passer-by without its owner having to come back. There is nothing
+    /// to gain by calling it on someone else's behalf, which is the point.
+    pub fn close_offer(ctx: Context<CloseOffer>) -> Result<()> {
+        let o = &ctx.accounts.offer;
+        require!(
+            matches!(o.status, OfferStatus::Accepted | OfferStatus::Cancelled),
+            EscrowError::OfferStillOpen
+        );
+        // Belt and braces: the money must already have gone where it was meant to.
+        require!(o.escrowed_lamports == 0, EscrowError::EscrowBalanceMismatch);
         Ok(())
     }
 
@@ -476,9 +541,11 @@ pub mod takeover_escrow {
 
         pay_from_listing(&ctx.accounts.offer.to_account_info(), &ctx.accounts.buyer, held)?;
 
+        let expired = ctx.accounts.signer.key() != ctx.accounts.offer.buyer;
         let o = &mut ctx.accounts.offer;
         o.escrowed_lamports = 0;
         o.status = OfferStatus::Cancelled;
+        emit!(OfferCancelled { offer: o.key(), buyer: o.buyer, amount: held, expired });
         Ok(())
     }
 
@@ -527,6 +594,7 @@ fn pay_from_listing<'info>(listing: &AccountInfo<'info>, to: &AccountInfo<'info>
 }
 
 fn settle_to_seller(ctx: &mut Context<Settle>) -> Result<()> {
+    let l_was_disputed = ctx.accounts.listing.status == Status::Disputed;
     let (seller_take, fee, held) = {
         let l = &ctx.accounts.listing;
         require_keys_eq!(l.seller, ctx.accounts.seller.key(), EscrowError::NotSeller);
@@ -539,13 +607,23 @@ fn settle_to_seller(ctx: &mut Context<Settle>) -> Result<()> {
     pay_from_listing(&listing_ai, &ctx.accounts.seller, seller_take)?;
     pay_from_listing(&listing_ai, &ctx.accounts.treasury, fee)?;
 
+    let arbitrated = l_was_disputed;
     let l = &mut ctx.accounts.listing;
     l.escrowed_lamports = 0;
     l.status = Status::Completed;
+    emit!(ListingSettled {
+        listing: l.key(),
+        seller: l.seller,
+        buyer: l.buyer,
+        seller_take,
+        fee,
+        arbitrated,
+    });
     Ok(())
 }
 
 fn settle_to_buyer(ctx: &mut Context<Settle>) -> Result<()> {
+    let after_abandoned_dispute = ctx.accounts.listing.status == Status::Disputed;
     let held = {
         let l = &ctx.accounts.listing;
         require_keys_eq!(l.buyer, ctx.accounts.buyer.key(), EscrowError::NotBuyer);
@@ -557,6 +635,12 @@ fn settle_to_buyer(ctx: &mut Context<Settle>) -> Result<()> {
     let l = &mut ctx.accounts.listing;
     l.escrowed_lamports = 0;
     l.status = Status::Refunded;
+    emit!(ListingRefunded {
+        listing: l.key(),
+        buyer: l.buyer,
+        amount: held,
+        after_abandoned_dispute,
+    });
     Ok(())
 }
 
@@ -921,4 +1005,135 @@ pub struct AcceptAuthority<'info> {
     pub pending: Account<'info, PendingAuthority>,
     #[account(mut)]
     pub new_authority: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct CloseOffer<'info> {
+    #[account(
+        mut,
+        seeds = [b"offer", offer.buyer.as_ref(), offer.offer_id.as_ref()],
+        bump = offer.bump,
+        has_one = buyer,
+        close = buyer
+    )]
+    pub offer: Account<'info, Offer>,
+    /// CHECK: matched against offer.buyer by `has_one`, and the rent goes here. No signer:
+    /// returning someone their own rent needs no permission from them.
+    #[account(mut)]
+    pub buyer: AccountInfo<'info>,
+}
+
+/* ------------------------------------------------------------------ events */
+
+// The program emitted nothing at all, so the only way to discover a listing or an offer
+// was `getProgramAccounts` — the one call mainnet providers throttle hardest and several
+// disable outright. That works on devnet with a handful of accounts and stops working
+// exactly when the market succeeds.
+//
+// These let an indexer follow the chain instead of interrogating it: a Helius webhook, a
+// geyser plugin or a plain log subscription can all reconstruct the whole market from the
+// stream. Added before mainnet on purpose, because once the upgrade authority is burned
+// they cannot be added at all.
+
+#[event]
+pub struct ListingCreated {
+    pub listing: Pubkey,
+    pub seller: Pubkey,
+    pub mint: Pubkey,
+    pub price: u64,
+    pub kind: u8,
+    pub authorities: u8,
+}
+
+#[event]
+pub struct AuthorityEscrowed {
+    pub listing: Pubkey,
+    pub mint: Pubkey,
+    /// Which authority moved, and everything now held, as bit flags.
+    pub which: u8,
+    pub escrowed: u8,
+    /// True once every promised authority is in custody and the listing is purchasable.
+    pub live: bool,
+}
+
+#[event]
+pub struct ListingBought {
+    pub listing: Pubkey,
+    pub buyer: Pubkey,
+    pub seller: Pubkey,
+    pub mint: Pubkey,
+    pub price: u64,
+    pub fee: u64,
+    pub authorities: u8,
+}
+
+#[event]
+pub struct ListingFunded {
+    pub listing: Pubkey,
+    pub buyer: Pubkey,
+    pub price: u64,
+    pub deadline: i64,
+}
+
+#[event]
+pub struct ListingSettled {
+    pub listing: Pubkey,
+    pub seller: Pubkey,
+    pub buyer: Pubkey,
+    pub seller_take: u64,
+    pub fee: u64,
+    /// True when an arbitrator decided it rather than the buyer releasing.
+    pub arbitrated: bool,
+}
+
+#[event]
+pub struct ListingRefunded {
+    pub listing: Pubkey,
+    pub buyer: Pubkey,
+    pub amount: u64,
+    /// True when the refund came from an arbitration that was never answered.
+    pub after_abandoned_dispute: bool,
+}
+
+#[event]
+pub struct ListingCancelled {
+    pub listing: Pubkey,
+    pub seller: Pubkey,
+    pub returned: u8,
+}
+
+#[event]
+pub struct ListingDisputed {
+    pub listing: Pubkey,
+    pub by: Pubkey,
+    pub at: i64,
+}
+
+#[event]
+pub struct OfferMade {
+    pub offer: Pubkey,
+    pub buyer: Pubkey,
+    pub mint: Pubkey,
+    pub price: u64,
+    pub authorities: u8,
+    pub expiry: i64,
+}
+
+#[event]
+pub struct OfferAccepted {
+    pub offer: Pubkey,
+    pub seller: Pubkey,
+    pub buyer: Pubkey,
+    pub mint: Pubkey,
+    pub price: u64,
+    pub fee: u64,
+}
+
+#[event]
+pub struct OfferCancelled {
+    pub offer: Pubkey,
+    pub buyer: Pubkey,
+    pub amount: u64,
+    /// True when a passer-by cleaned up an expired offer rather than the buyer withdrawing.
+    pub expired: bool,
 }
