@@ -34,15 +34,26 @@ services:
         value: devnet
       - key: FEE_BPS
         value: "500"
-      # Read by the server. Swap for a dedicated RPC before this sees real traffic:
-      # the public endpoint is aggressively rate-limited.
+      # Set in the Render dashboard, NOT here. `sync: false` tells Render this blueprint
+      # does not own the value, so applying the blueprint can never overwrite it — which
+      # it did once, silently reverting a paid endpoint back to the public one.
+      #
+      # It also keeps the key out of the repository, which matters: this one carries
+      # credentials, unlike every other variable in this file.
+      #
+      # Unset, the app falls back to https://api.<network>.solana.com, which works and is
+      # rate-limited hard enough that getTokenLargestAccounts alone takes 8 seconds.
       - key: RPC_URL
-        value: https://api.devnet.solana.com
-      # Baked into the browser bundle at build time, so it must be set before the build.
+        sync: false
+      # Baked into the browser bundle at build time, so it must be set before the build —
+      # and readable by anyone who views source. Only put a keyed endpoint here if that key
+      # is domain-restricted at the provider; otherwise strangers spend your quota.
       - key: NEXT_PUBLIC_RPC_URL
         value: https://api.devnet.solana.com
       - key: NEXT_PUBLIC_APP_NAME
         value: "Project: Takeover"
-      # Receives the platform fee. Public — the server never signs for it.
+      # Fallback only. The live treasury is read from the program's own config account, so
+      # rotating it on chain is enough and this value is used only before `initialize` has
+      # ever run. Public either way — the server never signs for it.
       - key: TREASURY_PUBKEY
-        value: F4SoR29Yitwun3hCLwdoKnUkiT47kSXY8eZJjgp7Ffof
+        value: DwjNBeS7KtXCqBhZBwMK6vEReW2fpgc3pU2WKzqfGgoV
