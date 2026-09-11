@@ -8,7 +8,7 @@
 // The 1200×630 card is the other shape that matters — it is what X, Discord and Telegram
 // show when somebody pastes the link, which for this project is the whole distribution.
 import { chromium } from "playwright-core";
-import { mkdir } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 
 const out = process.argv[2] ?? "public/brand";
 await mkdir(out, { recursive: true });
@@ -64,6 +64,18 @@ const lightGround = `background:#FAF9FE;background-image:
   radial-gradient(55% 55% at 76% 78%, rgba(16,191,174,.20), transparent 70%),
   radial-gradient(60% 60% at 62% 20%, rgba(255,138,61,.12), transparent 70%);`;
 
+/**
+ * The mark alone, on nothing.
+ *
+ * Every other asset here bakes in a background. Token aggregators — DexScreener, Jupiter,
+ * Birdeye — and anyone putting the coin in a list want a transparent square they can place
+ * on their own surface, and a solid tile looks wrong there. Written as an SVG too, because
+ * a logo that cannot be scaled without blurring is not really a logo.
+ */
+const bare = () => `<!doctype html><html><head><style>${RESET}
+body{background:transparent;display:grid;place-items:center}
+</style></head><body>${mark({ size: 920 })}</body></html>`;
+
 const coin = (dark) => `<!doctype html><html><head>${FONTS}<style>${RESET}
 body{${dark ? darkGround : lightGround}display:grid;place-items:center}
 </style></head><body>${mark({ size: 760, glow: dark })}</body></html>`;
@@ -111,14 +123,19 @@ const jobs = [
   ["banner-dark.png", banner(true), 1500, 500],
   ["banner-light.png", banner(false), 1500, 500],
   ["og.png", card(true), 1200, 630],
+  ["mark.png", bare(), 1024, 1024, true],
 ];
 
-for (const [name, html, width, height] of jobs) {
+for (const [name, html, width, height, transparent] of jobs) {
   const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
   await page.setContent(html, { waitUntil: "networkidle" });
   await page.evaluate(() => document.fonts.ready);
-  await page.screenshot({ path: `${out}/${name}` });
+  await page.screenshot({ path: `${out}/${name}`, omitBackground: Boolean(transparent) });
   await page.close();
-  console.log(`${out}/${name}  ${width}×${height}`);
+  console.log(`${out}/${name}  ${width}×${height}${transparent ? "  transparent" : ""}`);
 }
+
+// The same mark as a vector, so it survives being scaled to a billboard or a favicon.
+await writeFile(`${out}/mark.svg`, mark({ size: 1024 }));
+console.log(`${out}/mark.svg  vector`);
 await browser.close();
