@@ -40,16 +40,18 @@ services:
         value: devnet
       - key: FEE_BPS
         value: "500"
-      # A concrete default, deliberately. `sync: false` here is the correct pattern for a
-      # secret and it is what I reached for first, but Render refuses to deploy a service
-      # with a `sync: false` variable that has no dashboard value, and the site went into a
-      # 502 loop until this was put back.
+      # Owned by the Render dashboard, not by this file. Without `sync: false` the value
+      # below is pushed over the dashboard on every deploy, which silently reverted a paid
+      # endpoint back to the public one — the holder table kept coming back empty and the
+      # reason was three lines of YAML.
       #
-      # To use a paid endpoint, set RPC_URL in the Render dashboard. A value set there wins
-      # for an existing service; this line only supplies the default on a fresh blueprint.
-      # Never put a keyed URL on this line — the file is public.
+      # It also keeps the credential out of a public repository, which no other variable
+      # here needs.
+      #
+      # Unset, the app falls back to https://api.<network>.solana.com. That works, and it
+      # is throttled hard enough that a single getTokenLargestAccounts takes eight seconds.
       - key: RPC_URL
-        value: https://api.devnet.solana.com
+        sync: false
       # Baked into the browser bundle at build time, so it must be set before the build —
       # and readable by anyone who views source. Only put a keyed endpoint here if that key
       # is domain-restricted at the provider; otherwise strangers spend your quota.
