@@ -68,4 +68,6 @@ pub enum EscrowError {
     NotNominated,
     #[msg("This offer is still open")]
     OfferStillOpen,
+    #[msg("A dispute must stand for two days before it can be decided")]
+    DisputeTooFresh,
 }

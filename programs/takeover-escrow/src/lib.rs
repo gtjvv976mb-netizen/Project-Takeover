@@ -52,6 +52,20 @@ const SECONDS_PER_DAY: i64 = 86_400;
 /// exists to prevent.
 const ARBITRATION_WINDOW: i64 = 14 * SECONDS_PER_DAY;
 
+/// How long a dispute must stand before the arbitrator may decide it.
+///
+/// The arbitrator can only choose between the two parties, so it cannot pay itself. What
+/// it could do without this is rule the instant a dispute is raised — a seller takes
+/// payment, disputes, and a colluding arbitrator awards them the money before the buyer
+/// has noticed anything happened. The program sends no notifications, so "before the buyer
+/// notices" is a real window rather than a theoretical one.
+///
+/// Two days does not stop a determined collusion, but it makes it slow and public: the
+/// dispute is on chain, it emits an event, and the other side has time to see it and say
+/// so. Combined with ARBITRATION_WINDOW the arbitrator has a bounded slot to act in —
+/// after two days, and before fourteen, or the buyer simply takes their money back.
+const ARBITRATION_MIN_AGE: i64 = 2 * SECONDS_PER_DAY;
+
 #[program]
 pub mod takeover_escrow {
     use super::*;
@@ -369,6 +383,15 @@ pub mod takeover_escrow {
             let l = &ctx.accounts.listing;
             require!(l.status == Status::Disputed, EscrowError::BadStatus);
             require_keys_eq!(ctx.accounts.config.arbitrator, ctx.accounts.signer.key(), EscrowError::NotArbitrator);
+            // Listings disputed before `disputed_at` existed read it back as 0; those are
+            // already older than any window, so let them through rather than freeze them.
+            if l.disputed_at != 0 {
+                let now = Clock::get()?.unix_timestamp;
+                require!(
+                    now >= l.disputed_at.checked_add(ARBITRATION_MIN_AGE).ok_or(EscrowError::MathOverflow)?,
+                    EscrowError::DisputeTooFresh
+                );
+            }
         }
         if pay_seller { settle_to_seller(&mut ctx) } else { settle_to_buyer(&mut ctx) }
     }

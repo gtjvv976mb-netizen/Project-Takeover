@@ -323,7 +323,20 @@ describe("the arbitrator is bounded", () => {
     );
   });
 
+  it("will not decide a dispute that was raised moments ago", async () => {
+    // A seller could otherwise take payment, dispute, and have a colluding arbitrator
+    // award them the money before the buyer had noticed anything was wrong — the program
+    // sends no notifications, so that window is real.
+    await expectFail(
+      program.methods.resolve(true)
+        .accounts({ config: configPda, listing, signer: arbitrator.publicKey, seller: seller.publicKey, buyer: buyer.publicKey, treasury: treasury.publicKey })
+        .signers([arbitrator]).rpc(),
+      "DisputeTooFresh",
+    );
+  });
+
   it("can only send the money to the seller or the buyer", async () => {
+    await setClockAhead(86_400 * 3); // past the two-day floor
     const before = await ctx.banksClient.getBalance(buyer.publicKey);
     await program.methods.resolve(false)
       .accounts({ config: configPda, listing, signer: arbitrator.publicKey, seller: seller.publicKey, buyer: buyer.publicKey, treasury: treasury.publicKey })

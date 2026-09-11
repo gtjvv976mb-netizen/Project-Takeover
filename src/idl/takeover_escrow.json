@@ -1866,6 +1866,11 @@
       "code": 6032,
       "name": "OfferStillOpen",
       "msg": "This offer is still open"
+    },
+    {
+      "code": 6033,
+      "name": "DisputeTooFresh",
+      "msg": "A dispute must stand for two days before it can be decided"
     }
   ],
   "types": [
