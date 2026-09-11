@@ -22,7 +22,7 @@ import os from "node:os";
 import path from "node:path";
 import assert from "node:assert/strict";
 import {
-  Connection, Keypair, LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction,
+  Connection, Keypair, LAMPORTS_PER_SOL, SystemProgram, Transaction,
   type VersionedTransaction,
 } from "@solana/web3.js";
 import { createInitializeMintInstruction, getMint, MINT_SIZE, TOKEN_PROGRAM_ID } from "@solana/spl-token";

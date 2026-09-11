@@ -25,10 +25,13 @@ export function Nav() {
         <Link href="/" className="group flex shrink-0 items-center gap-2.5" aria-label="Project: Takeover — home">
           {/* the husk refills as you point at it: somebody just moved in */}
           <span className="logo-fill"><Logo size={30} /></span>
-          <span className="text-[17px] font-bold tracking-tight text-ink">Project: Takeover</span>
+          {/* Below sm the wordmark, the theme switch and the wallet button cannot all fit
+              in 390px, and the row was pushing 62px off the side of the screen. The ghost
+              is the distinctive half of the mark, so it carries the brand alone down there. */}
+          <span className="hidden text-[17px] font-bold tracking-tight text-ink sm:inline">Project: Takeover</span>
         </Link>
 
-        <nav className="ml-2 hidden items-center gap-1 md:flex">
+        <nav className="ml-2 hidden items-center gap-1 lg:flex">
           {LINKS.map((l) => (
             <Link key={l.href} href={l.href} aria-current={path === l.href ? "page" : undefined}
               className={`rounded-lg px-3 py-2 text-[14px] font-semibold transition-colors ${path === l.href ? "bg-bg-2 text-ink" : "text-muted hover:bg-bg-2 hover:text-ink"}`}>
@@ -47,7 +50,7 @@ export function Nav() {
       </div>
 
       {/* mobile nav */}
-      <nav className="flex gap-1 overflow-x-auto border-t border-line px-4 py-2 md:hidden">
+      <nav className="flex gap-1 overflow-x-auto border-t border-line px-4 py-2 lg:hidden">
         {LINKS.map((l) => (
           <Link key={l.href} href={l.href} aria-current={path === l.href ? "page" : undefined}
             className={`shrink-0 rounded-lg px-3 py-1.5 text-[13px] font-semibold ${path === l.href ? "bg-bg-2 text-ink" : "text-muted"}`}>

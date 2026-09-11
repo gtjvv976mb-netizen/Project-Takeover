@@ -146,11 +146,18 @@ describe("a funded offer on a token nobody listed", () => {
   });
 
   it("cannot be accepted twice", async () => {
+    // Signed by `stranger`, not `owner`, so this is not byte-identical to the accept that
+    // just succeeded. Bankrun holds one blockhash for the run, so repeating a transaction
+    // verbatim is rejected as already processed before the program ever sees it — which
+    // reads as a failure of the program and is nothing of the sort.
+    //
+    // The meaning is unchanged: `OfferNotOpen` is the first check in accept_offer, so it
+    // fires whoever signs.
     await expectFail(
       program.methods.acceptOffer()
-        .accounts({ config: configPda, offer, seller: owner.publicKey, buyer: bidder.publicKey,
+        .accounts({ config: configPda, offer, seller: stranger.publicKey, buyer: bidder.publicKey,
           treasury: treasury.publicKey, mint, metadata: null, tokenMetadataProgram: null, tokenProgram: TOKEN_PROGRAM_ID })
-        .signers([owner]).rpc(),
+        .signers([stranger]).rpc(),
       "OfferNotOpen",
     );
   });

@@ -116,7 +116,7 @@ before(async () => {
   provider = new BankrunProvider(ctx);
   program = new Program(idl as TakeoverEscrow, provider);
 
-  fundAccounts(admin, arbitrator, treasury, seller, buyer, stranger, successor);
+  fundAccounts(admin, arbitrator, treasury, seller, buyer, stranger, successor, cranker);
 
   configPda = PublicKey.findProgramAddressSync([Buffer.from("config")], program.programId)[0];
   await program.methods
@@ -461,6 +461,10 @@ describe("the config authority can be handed over, in two steps", () => {
     );
   });
 
+  // Each acceptAuthority attempt below uses a DIFFERENT signer on purpose. Bankrun holds
+  // one blockhash for the whole run, so two attempts with the same instruction, accounts
+  // and signer serialise to the same transaction signature and the second is rejected as
+  // already processed — which looks exactly like a program bug and is not one.
   it("refuses an acceptance when nobody was nominated", async () => {
     await expectFail(
       program.methods.acceptAuthority()
@@ -483,8 +487,8 @@ describe("the config authority can be handed over, in two steps", () => {
   it("will not let a bystander seize someone else's nomination", async () => {
     await expectFail(
       program.methods.acceptAuthority()
-        .accounts({ config: configPda, pending: pendingPda, newAuthority: stranger.publicKey })
-        .signers([stranger]).rpc(),
+        .accounts({ config: configPda, pending: pendingPda, newAuthority: cranker.publicKey })
+        .signers([cranker]).rpc(),
       "NotNominated",
     );
   });
@@ -517,8 +521,8 @@ describe("the config authority can be handed over, in two steps", () => {
     assert.equal(await ctx.banksClient.getAccount(pendingPda), null, "withdrawn");
     await expectFail(
       program.methods.acceptAuthority()
-        .accounts({ config: configPda, pending: pendingPda, newAuthority: stranger.publicKey })
-        .signers([stranger]).rpc(),
+        .accounts({ config: configPda, pending: pendingPda, newAuthority: buyer.publicKey })
+        .signers([buyer]).rpc(),
       "AccountNotInitialized",
     );
   });

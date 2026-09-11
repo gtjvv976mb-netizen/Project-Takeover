@@ -8,7 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import { AnchorProvider, Program, Wallet, BN } from "@coral-xyz/anchor";
 import { Connection, Keypair, LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
-import { AuthorityType, createInitializeMintInstruction, createSetAuthorityInstruction, getMint, MINT_SIZE, TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { createInitializeMintInstruction, getMint, MINT_SIZE, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import nacl from "tweetnacl";
 import bs58 from "bs58";
 
