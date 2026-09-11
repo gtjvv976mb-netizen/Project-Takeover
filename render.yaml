@@ -19,6 +19,12 @@ services:
     # SQLite needs a single writer on one machine, so this service must never scale out.
     numInstances: 1
 
+    # A consequence worth knowing before you panic at a 502: a service with a disk cannot
+    # deploy with zero downtime. Render can only attach the disk to one instance, so the
+    # old one must fully stop before the new one starts, and every deploy costs roughly a
+    # minute or two of 502s. That is normal here. Ten deploys in an hour looks exactly like
+    # a crash loop from outside, and once did.
+
     disk:
       name: takeover-data
       mountPath: /var/data
