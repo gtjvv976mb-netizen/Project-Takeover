@@ -52,6 +52,10 @@ services:
         value: https://api.devnet.solana.com
       - key: NEXT_PUBLIC_APP_NAME
         value: "Project: Takeover"
+      # Absolute base for canonical and Open Graph URLs. A link preview needs a full URL,
+      # so this must match whatever domain the site is actually served from.
+      - key: NEXT_PUBLIC_SITE_URL
+        value: https://project-takeover.com
       # Fallback only. The live treasury is read from the program's own config account, so
       # rotating it on chain is enough and this value is used only before `initialize` has
       # ever run. Public either way — the server never signs for it.

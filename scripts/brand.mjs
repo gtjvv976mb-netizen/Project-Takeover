@@ -5,6 +5,8 @@
 //
 // Sizes follow pump.fun's uploads: a square coin image (1000×1000 is comfortably above
 // its minimum and stays sharp when the feed crops it to a circle) and a 1500×500 banner.
+// The 1200×630 card is the other shape that matters — it is what X, Discord and Telegram
+// show when somebody pastes the link, which for this project is the whole distribution.
 import { chromium } from "playwright-core";
 import { mkdir } from "node:fs/promises";
 
@@ -66,6 +68,23 @@ const coin = (dark) => `<!doctype html><html><head>${FONTS}<style>${RESET}
 body{${dark ? darkGround : lightGround}display:grid;place-items:center}
 </style></head><body>${mark({ size: 760, glow: dark })}</body></html>`;
 
+/** The link-preview card. Taller than the banner, so the mark can sit above the words. */
+const card = (dark) => `<!doctype html><html><head>${FONTS}<style>${RESET}
+body{${dark ? darkGround : lightGround}display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:6px;text-align:center;padding:0 80px;color:${dark ? "#FFFFFF" : "#1B1830"}}
+.name{font-size:92px;font-weight:800;letter-spacing:-.035em;line-height:1.02}
+.name b{background:linear-gradient(105deg,${VIOLET},${TEAL});-webkit-background-clip:text;background-clip:text;color:transparent;font-weight:800}
+.tag{margin-top:22px;font-size:34px;font-weight:600;letter-spacing:-.01em;opacity:${dark ? ".82" : ".76"}}
+.foot{margin-top:30px;display:flex;align-items:center;gap:14px;font-family:'JetBrains Mono',monospace;
+  font-size:21px;letter-spacing:.02em;opacity:${dark ? ".62" : ".58"}}
+.dot{width:10px;height:10px;border-radius:99px;background:${TEAL};box-shadow:0 0 0 6px ${TEAL}22}
+</style></head><body>
+  ${mark({ size: 190, glow: dark })}
+  <div class="name">Think you&rsquo;d run it better?<br><b>Buy it.</b></div>
+  <div class="tag">Buy Solana projects outright, not by the bag.</div>
+  <div class="foot"><span class="dot"></span>project-takeover.com</div>
+</body></html>`;
+
 const banner = (dark) => `<!doctype html><html><head>${FONTS}<style>${RESET}
 body{${dark ? darkGround : lightGround}display:flex;align-items:center;gap:46px;padding:0 96px;
   color:${dark ? "#FFFFFF" : "#1B1830"}}
@@ -81,7 +100,7 @@ body{${dark ? darkGround : lightGround}display:flex;align-items:center;gap:46px;
   <div>
     <div class="name">Project: <b>Takeover</b></div>
     <div class="tag">Think you&rsquo;d run it better? <b>Buy it.</b></div>
-    <div class="foot"><span class="dot"></span>Solana's first trustless handover &nbsp;·&nbsp; project-takeover.onrender.com</div>
+    <div class="foot"><span class="dot"></span>Solana's first trustless handover &nbsp;·&nbsp; project-takeover.com</div>
   </div>
 </body></html>`;
 
@@ -91,6 +110,7 @@ const jobs = [
   ["token-light.png", coin(false), 1000, 1000],
   ["banner-dark.png", banner(true), 1500, 500],
   ["banner-light.png", banner(false), 1500, 500],
+  ["og.png", card(true), 1200, 630],
 ];
 
 for (const [name, html, width, height] of jobs) {

@@ -8,7 +8,7 @@
  * do move into the program's custody, so a stranger with a devnet wallet can buy one and
  * genuinely walk away holding it.
  *
- *   node scripts/seed-live.mjs https://project-takeover.onrender.com
+ *   node scripts/seed-live.mjs https://project-takeover.com
  *
  * Funds come from the deploy wallet (~/.config/solana/id.json) because devnet's faucet is
  * rate-limited to the point of uselessness. Budget roughly 0.03 SOL per listing.

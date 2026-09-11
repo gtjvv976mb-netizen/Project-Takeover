@@ -45,7 +45,7 @@ It still needs a small SOL balance to pay its own transaction fees.
 
 ```bash
 # treasury and arbitrator, as the program has them
-curl -s https://project-takeover.onrender.com/api/config | python3 -m json.tool
+curl -s https://project-takeover.com/api/config | python3 -m json.tool
 
 # who can replace the program
 solana program show B6sQ8s6rikSPqwPhm6XPpy16mVuJ87raCcVFXMA6sSVG --url devnet
