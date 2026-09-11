@@ -25,7 +25,7 @@ Halborn. Expect roughly $15–50k and two to four weeks.
 | M-1 | Medium | `accept_offer` never passes the Metaplex program to its CPI | **Fixed** |
 | M-2 | Medium | `accept_offer` does not pin `token_metadata_program` | **Fixed** |
 | M-3 | Medium | `cancel` does not check the mint against the listing | **Fixed** |
-| M-4 | Medium | Arbitrator power is unbounded and untimed | Bounded by H-1's timeout; still a single key |
+| M-4 | Medium | Arbitrator power is unbounded and untimed | **Bounded both ways**; still a single key |
 | H-3 | High | The config authority could never be rotated | **Fixed** |
 | L-1 | Low | `close_listing` sweeps donated lamports to the seller | Open |
 | L-2 | Low→High on mainnet | No events, so the index depends entirely on polling | **Fixed** |
@@ -326,3 +326,25 @@ ListingBought carrying listing, buyer, seller, mint, price, fee and authorities.
 
 Added before mainnet deliberately: once the upgrade authority is burned, events cannot be
 added at all, and the decision to burn it is supposed to come right after the audit.
+
+**M-4, bounded on the other side too.** H-1 stopped an arbitrator holding funds hostage by
+never ruling. The opposite remained: rule instantly. A seller could take payment, raise a
+dispute and have a colluding arbitrator award them the money before the buyer had noticed
+anything was wrong — the program sends no notifications, so that window was real rather
+than theoretical.
+
+A dispute must now stand for two days before it can be decided. That does not stop a
+determined collusion, but it makes it slow and public: the dispute is on chain, it emits an
+event, and the other side has time to see it and object. The arbitrator now has a bounded
+slot — after two days, before fourteen — and outside it the buyer simply takes their money
+back.
+
+`scripts/preflight.mjs` checks the things that are cheap to verify and expensive to get
+wrong, and exits non-zero so it can gate a deploy: the committed IDL matches the built
+binary, nothing in `programs/` is uncommitted, the fee is under the cap, the three roles
+are three different keys, and — on mainnet — none of them is the local deploy key. It also
+compares the live site's slot height against the cluster being checked, which catches an
+RPC endpoint pointed at the wrong network. That one is worth its own line: a devnet site
+with a mainnet key answers every question confidently and wrongly, nothing errors, and it
+looks like the site is broken rather than looking elsewhere. It cost an afternoon before
+the check existed.

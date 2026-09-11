@@ -147,8 +147,28 @@ if (SITE) {
     }
 
     const h = await (await fetch(`${SITE}/api/health`, { signal: AbortSignal.timeout(30_000) })).json();
-    h.rpcReachable ? pass("site can reach the cluster", `slot ${h.slot}`) : fail("site cannot reach its RPC");
-    if (h.programDeployed === false) fail("site's RPC cannot see the program", "wrong network on the RPC endpoint?");
+    if (!h.rpcReachable) fail("site cannot reach its RPC");
+    else {
+      pass("site can reach the cluster", `slot ${h.slot}`);
+
+      // A site set to devnet with a mainnet RPC key answers every question confidently and
+      // wrongly: mints are "not found", the program is "not deployed", listings vanish.
+      // Nothing errors, so it looks like the site is broken rather than pointed elsewhere.
+      // Slot heights differ by tens of millions between clusters, which makes this cheap
+      // to catch and worth catching — it cost an afternoon once.
+      const ours = await conn.getSlot("confirmed").catch(() => null);
+      if (ours !== null) {
+        const drift = Math.abs(ours - h.slot);
+        drift < 5_000_000
+          ? pass("site's RPC is on the same cluster as this check", `within ${drift.toLocaleString()} slots`)
+          : fail(
+              "site's RPC is on a DIFFERENT cluster",
+              `site slot ${h.slot.toLocaleString()} vs ${NETWORK} ${ours.toLocaleString()} — check RPC_URL's network`,
+            );
+      }
+    }
+    if (h.programDeployed === false || h.programDeployed === null)
+      fail("site's RPC cannot see the program", "usually means RPC_URL points at the wrong cluster");
   } catch (e) {
     fail("site unreachable", String(e.message ?? e).slice(0, 80));
   }

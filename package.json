@@ -16,7 +16,8 @@
     "program:test": "tsx --test-concurrency=1 tests/escrow.test.ts && tsx --test-concurrency=1 tests/metadata.test.ts && tsx --test-concurrency=1 tests/offers.test.ts",
     "e2e:offers": "node scripts/e2e-offers.mjs",
     "prove": "node scripts/prove-handover.mjs",
-    "e2e:browser": "tsx scripts/e2e-browser-paths.mts"
+    "e2e:browser": "tsx scripts/e2e-browser-paths.mts",
+    "preflight": "node scripts/preflight.mjs"
   },
   "dependencies": {
     "@solana/spl-token": "^0.4.15",
