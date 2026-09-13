@@ -133,6 +133,32 @@ Two honest options, in descending order of how much they are worth:
 Doing neither, and shipping to mainnet with one laptop key able to replace the program, is
 not a middle path. It is the thing the site tells people is impossible.
 
+## The program keypair
+
+`target/deploy/takeover_escrow-keypair.json` is not a build artifact. It **is** the
+program's address: the address is its public key, and the private half is the only thing
+that can ever deploy to or upgrade that address. It is gitignored, so it exists only
+where it was generated. Lose it and the address is dead — not transferable, not
+recoverable, not by anyone.
+
+The devnet program `B6sQ8s6rik…` was deployed from a machine that no longer exists, so
+its keypair is gone. That address can never be upgraded again, which costs nothing since
+devnet is disposable, and means mainnet needs a fresh address:
+
+```bash
+node scripts/new-program-id.mjs            # show what changes
+node scripts/new-program-id.mjs --yes      # generate, and rewrite all three places
+```
+
+Three places have to agree or the site builds transactions the program rejects: Anchor's
+`declare_id!` inside the binary, the IDL the website reads, and `Anchor.toml`. The script
+writes all three from one keypair and deletes any binary built for the old address, since
+deploying that would be refused by its own id check after the rent was already paid.
+
+**Back the keypair up before deploying**, somewhere that is not the laptop that made it.
+
+---
+
 ## Runbook: moving the three powers to a Squads multisig
 
 Everything below is signed on the machine that holds the deploy key. Nothing in this
