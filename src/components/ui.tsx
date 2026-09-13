@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { formatSol, shortKey, STATUS_LABELS, TYPE_LABELS, type Listing, type ListingStatus, type ListingType } from "@/lib/types";
+import { formatSol, shortKey, STATUS_LABELS, TYPE_LABELS, type Listing, type ListingStatus, type ListingType , type OffchainAsset } from "@/lib/types";
 import { CoverArt } from "./CoverArt";
 
 /* ------------------------------------------------------------- categories */
@@ -114,8 +114,15 @@ export function ListingCard({ l }: { l: Listing }) {
           </p>
         </div>
 
-        {(t?.symbol || revoked || t?.pump?.complete || t?.holders) && (
+        {(t?.symbol || revoked || t?.pump?.complete || t?.holders || l.type === "offchain") && (
           <div className="flex flex-wrap gap-1.5">
+            {/* An off-chain listing has no on-chain fact behind it, so the card says which
+                kind of claim the reader is looking at rather than letting them assume. */}
+            {l.type === "offchain" && (
+              (l.asset as OffchainAsset).domainVerified
+                ? <Chip tint="var(--color-green)">Domain verified</Chip>
+                : <Chip tint="var(--color-amber)">Unverified seller</Chip>
+            )}
             {t?.symbol && <Chip>${t.symbol}</Chip>}
             {revoked && <Chip tint="var(--color-blue)">Authorities revoked</Chip>}
             {t?.pump?.complete && <Chip tint="var(--color-blue)">Graduated</Chip>}

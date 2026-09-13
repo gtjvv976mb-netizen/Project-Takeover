@@ -18,6 +18,15 @@ listing carries a proof-of-work block read from chain (supply, authorities, hold
 | `pump_creator` | pump.fun coin creator role (creator fees + fee-split control) | Listing verified against the bonding curve's on-chain `creator` → buyer pays escrow → seller transfers ownership on pump.fun → server verifies `creator == buyer` and auto-releases (buyer can also release manually) |
 | `offchain` | Websites, domains, X/Telegram/Discord, "everything a wallet controls" bundles | Buyer pays escrow → seller delivers off-platform + leaves a note → buyer releases → disputes go to an admin who releases or refunds |
 
+Token and pump.fun listings cannot be faked: the API refuses unless the seller currently
+holds what they are selling, and a token listing only goes live once the authorities are in
+the program's custody. Off-chain listings have no such fact behind them — anyone can type a
+sentence about somebody else's website — so they are labelled **Unverified seller** until
+the seller publishes a DNS TXT record naming their wallet (`takeover-verify=<wallet>`, at
+the domain root or on `_takeover`). That proves control of a domain and nothing else, which
+is stated rather than implied. Anyone but the seller can report a listing; reports queue it
+for an admin and are counted publicly, but never remove it on their own.
+
 Private keys are never sold. A copied key is never truly transferred, so the app sells what a wallet
 *controls* instead.
 
@@ -185,6 +194,10 @@ ed25519 signature over `Takeover\naction: <action>\nlisting: <id|->\nts: <timest
 | `POST /api/builders/:wallet` | `profile` — edit your own builder page | that wallet |
 | `POST /api/listings` | `create` | seller |
 | `POST /api/listings/:id/verify-escrow` | `verify-escrow` — confirms authorities are in escrow, goes live | seller |
+| `GET /api/listings/:id/verify-domain` | off-chain listings: the TXT record required, and whether it is published | — |
+| `POST /api/listings/:id/verify-domain` | `verify-domain` — re-check DNS and record the result on the listing | seller |
+| `GET /api/listings/:id/report` | how many open reports a listing carries | — |
+| `POST /api/listings/:id/report` | `report` `{reason}` — flag a listing for review | anyone but the seller |
 | `POST /api/listings/:id/pay` | `pay` — verify SOL transfer, settle or hold | buyer |
 | `POST /api/listings/:id/settle` | `settle` — retry token settlement | buyer/seller |
 | `POST /api/listings/:id/verify-handoff` | `verify-handoff` — pump.fun on-chain check + delivery note | buyer/seller |

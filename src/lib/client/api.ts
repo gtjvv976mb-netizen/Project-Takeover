@@ -4,6 +4,15 @@ import type { WalletContextState } from "@solana/wallet-adapter-react";
 import { buildAuthMessage } from "@/lib/auth";
 import type { AppConfig, Listing, ListingEvent, PumpControl, PumpControlVerdict, SignedRequest, TokenInfo } from "@/lib/types";
 
+/** What /api/listings/:id/verify-domain answers for an off-chain listing. */
+export type DomainProofResult = {
+  verified: boolean;
+  recorded: boolean;
+  verifiedHost: string | null;
+  expectedRecord: string;
+  proofs: { host: string; verified: boolean; detail: string }[];
+};
+
 /** What /api/listings/:id/handover answers for a pump.fun listing. */
 export type Handover = {
   subject: string;
@@ -39,4 +48,6 @@ export const api = {
   listings: (q: Record<string, string> = {}) => fetch(`/api/listings?${new URLSearchParams(q)}`).then((r) => parse<Listing[]>(r)),
   listing: (id: string) => fetch(`/api/listings/${id}`).then((r) => parse<{ listing: Listing; events: ListingEvent[] }>(r)),
   handover: (id: string) => fetch(`/api/listings/${id}/handover`).then((r) => parse<Handover>(r)),
+  domainProof: (id: string) => fetch(`/api/listings/${id}/verify-domain`).then((r) => parse<DomainProofResult>(r)),
+  reports: (id: string) => fetch(`/api/listings/${id}/report`).then((r) => parse<{ reports: number }>(r)),
 };
