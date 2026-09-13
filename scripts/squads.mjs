@@ -18,7 +18,42 @@
 import crypto from "node:crypto";
 import bs58 from "bs58";
 import { Connection, PublicKey } from "@solana/web3.js";
-import { parseSquadsMultisig, squadsVaultPda, SQUADS_V4_PROGRAM_ID } from "../src/lib/solana-shared.ts";
+
+// Self-contained, like every other script here, so `node scripts/squads.mjs` works with
+// no build step and no tsx. The same two readers exist in src/lib/solana-shared.ts for
+// the site, and tests/pump.test.ts pins that copy against Squads' published layout.
+const SQUADS_V4_PROGRAM_ID = new PublicKey("SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf");
+
+/** Seeds ["multisig", multisig, "vault", index], per the Squads SDK. */
+const squadsVaultPda = (multisig, index = 0) => PublicKey.findProgramAddressSync(
+  [Buffer.from("multisig"), multisig.toBuffer(), Buffer.from("vault"), Buffer.from([index])],
+  SQUADS_V4_PROGRAM_ID,
+)[0];
+
+/**
+ * Multisig layout after the 8-byte discriminator: create_key, config_authority,
+ * threshold u16, time_lock u32, transaction_index u64, stale_transaction_index u64,
+ * Option<rent_collector>, bump u8, then a Borsh vec of {key, permissions u8}.
+ */
+function parseSquadsMultisig(data) {
+  const b = Buffer.from(data);
+  const disc = crypto.createHash("sha256").update("account:Multisig").digest().subarray(0, 8);
+  if (b.length < 60 || !b.subarray(0, 8).equals(disc)) return null;
+  let o = 8 + 32 + 32;
+  const threshold = b.readUInt16LE(o); o += 2;
+  const timeLock = b.readUInt32LE(o); o += 4;
+  o += 16;
+  o += b[o] === 1 ? 33 : 1;
+  o += 1;
+  if (o + 4 > b.length) return null;
+  const memberCount = b.readUInt32LE(o); o += 4;
+  const members = [];
+  for (let i = 0; i < memberCount && o + 33 <= b.length; i++) {
+    members.push(new PublicKey(b.subarray(o, o + 32)).toBase58());
+    o += 33;
+  }
+  return { threshold, memberCount, timeLock, members };
+}
 
 const RPC = process.env.RPC_URL ?? "https://api.mainnet-beta.solana.com";
 const conn = new Connection(RPC, "confirmed");
@@ -39,6 +74,8 @@ if (info.owner.equals(SQUADS_V4_PROGRAM_ID)) {
 } else {
   process.stderr.write("searching for the multisig this vault belongs to... ");
   const disc = crypto.createHash("sha256").update("account:Multisig").digest().subarray(0, 8);
+  // Scanning every squad takes a few seconds. Worth it: the alternative is asking
+  // someone to find an address the app never shows them.
   const all = await conn.getProgramAccounts(SQUADS_V4_PROGRAM_ID, {
     filters: [{ memcmp: { offset: 0, bytes: bs58.encode(disc) } }],
     dataSlice: { offset: 0, length: 0 },
