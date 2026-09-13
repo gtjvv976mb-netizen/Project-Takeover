@@ -150,8 +150,17 @@ arbitrator pays its own transaction fees.
 
 ```bash
 node scripts/upgrade-authority.mjs status
-node scripts/upgrade-authority.mjs transfer <VAULT> --yes
+node scripts/upgrade-authority.mjs transfer <VAULT> --multisig <MULTISIG>        # dry run
+node scripts/upgrade-authority.mjs transfer <VAULT> --multisig <MULTISIG> --yes
 ```
+
+`--multisig` is not decoration. A Squads vault can only be signed for on the network
+where its multisig account lives, so a vault created in the app on mainnet is inert on
+devnet: handing a devnet program to it would leave nobody able to upgrade it, ever. The
+script therefore refuses any destination off the ed25519 curve unless the named multisig
+exists **on the network being written to** and the destination really is one of its
+vaults. The dry run needs no key at all, so the destination can be checked from any
+machine before the real thing is attempted.
 
 **2. Config authority → vault.** Two steps, because a one-step transfer to a mistyped
 address would freeze the fee, treasury and arbitrator forever. Nominate with the deploy

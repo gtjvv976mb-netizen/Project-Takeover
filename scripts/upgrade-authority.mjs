@@ -2,7 +2,7 @@
  * Who can replace the escrow program, and handing that power away.
  *
  *   node scripts/upgrade-authority.mjs status
- *   node scripts/upgrade-authority.mjs transfer <SQUADS_VAULT_PUBKEY>   # to a multisig
+ *   node scripts/upgrade-authority.mjs transfer <VAULT> --multisig <MULTISIG> --yes
  *   node scripts/upgrade-authority.mjs burn --yes                        # immutable, forever
  *
  * Signed by the current upgrade authority, read from PAYER or ~/.config/solana/id.json,
@@ -14,6 +14,13 @@
  * loader's SetAuthority instruction is the u32 4, with the ProgramData account, the
  * current authority as signer, and optionally the new authority. Leaving the new
  * authority out is what makes a program immutable.
+ *
+ * A Squads vault is only signable on the network where its multisig account lives. A
+ * vault created in the Squads app on mainnet does not exist on devnet, and handing a
+ * devnet program to it would leave nobody able to sign for it ever again — the same
+ * permanent loss as a typo, reached by a plausible mistake. So a transfer to any address
+ * off the ed25519 curve is refused unless --multisig names a Squads multisig that exists
+ * on the network being written to and whose vault the destination actually is.
  *
  * The upgrade authority is the one power in this project bounded by nothing but who
  * holds it: a new deployment could reassign every escrowed authority and drain every
@@ -39,6 +46,10 @@ const argv = process.argv.slice(2);
 const cmd = argv[0];
 const yes = argv.includes("--yes");
 const keyPath = process.env.PAYER ?? path.join(os.homedir(), ".config/solana/id.json");
+const flag = (name) => { const i = argv.indexOf(`--${name}`); return i >= 0 ? argv[i + 1] : undefined; };
+const MULTISIG = (() => { try { const v = flag("multisig") ?? process.env.SQUADS_MULTISIG; return v ? new PublicKey(v) : null; } catch { return null; } })();
+const vaultOf = (ms, i) => PublicKey.findProgramAddressSync(
+  [Buffer.from("multisig"), ms.toBuffer(), Buffer.from("vault"), Buffer.from([i])], SQUADS_V4)[0];
 
 async function current() {
   const info = await conn.getAccountInfo(programData);
@@ -49,9 +60,37 @@ async function current() {
 
 async function custodyOf(pubkey) {
   const info = await conn.getAccountInfo(pubkey).catch(() => null);
-  if (!info || info.owner.equals(SYSTEM)) return "a single wallet";
-  if (info.owner.equals(SQUADS_V4)) return "a Squads multisig";
-  return `an account owned by ${info.owner.toBase58()}`;
+  if (info?.owner.equals(SQUADS_V4)) return "a Squads multisig account, not a vault";
+  // On the curve means a keypair exists for it, whoever holds it. That is a wallet, and
+  // no amount of multisig context changes it.
+  if (PublicKey.isOnCurve(pubkey.toBytes())) return "a single wallet";
+  if (MULTISIG && isVaultOf(pubkey, MULTISIG) !== null) return "a Squads multisig vault";
+  return "a program-derived address";
+}
+
+/** Which vault index of `ms` this is, or null. */
+function isVaultOf(target, ms) {
+  for (let i = 0; i < 8; i++) if (vaultOf(ms, i).equals(target)) return i;
+  return null;
+}
+
+/**
+ * Can anything on THIS network actually sign for `target`?
+ *
+ * An ordinary wallet always can: somebody holds its private key. A program-derived
+ * address can only be signed for by its owning program, which needs its own state on
+ * this network — so a mainnet Squads vault is inert on devnet, and handing a program to
+ * one there is indistinguishable from destroying its upgradeability.
+ */
+async function verifyVault(target) {
+  if (PublicKey.isOnCurve(target.toBytes())) return { ok: true, why: "an ordinary wallet: its private key exists" };
+  if (!MULTISIG) return { ok: false, why: "it is a program-derived address and no --multisig was given, so this cannot be checked" };
+  const ms = await conn.getAccountInfo(MULTISIG).catch(() => null);
+  if (!ms) return { ok: false, why: `multisig ${MULTISIG.toBase58()} does not exist on this network — a vault of it cannot sign here` };
+  if (!ms.owner.equals(SQUADS_V4)) return { ok: false, why: `${MULTISIG.toBase58()} exists but is not a Squads multisig (owner ${ms.owner.toBase58()})` };
+  const i = isVaultOf(target, MULTISIG);
+  if (i !== null) return { ok: true, why: `vault ${i} of Squads multisig ${MULTISIG.toBase58()}, which exists on this network` };
+  return { ok: false, why: `not a vault (0-7) of multisig ${MULTISIG.toBase58()}` };
 }
 
 /** BPF upgradeable loader `SetAuthority`: u32 LE instruction index 4. */
@@ -77,23 +116,37 @@ async function status() {
 async function change(newAuthority) {
   const auth = await current();
   if (!auth) throw new Error("the program is already immutable");
-  const signer = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(keyPath, "utf8"))));
-  if (!signer.publicKey.equals(auth)) throw new Error(`the upgrade authority is ${auth.toBase58()}, but ${keyPath} is ${signer.publicKey.toBase58()}`);
 
   if (newAuthority) {
     const custody = await custodyOf(newAuthority);
+    const check = await verifyVault(newAuthority);
     console.log(`about to hand the upgrade authority of ${PID.toBase58()}`);
-    console.log(`  from ${auth.toBase58()}`);
-    console.log(`  to   ${newAuthority.toBase58()} (${custody})`);
-    if (custody !== "a Squads multisig") {
-      console.log("  ! that address is not a Squads multisig. If it is a wallet, this only moves the problem;");
-      console.log("    if it is a typo, the program can never be upgraded again and nobody can fix that.");
+    console.log(`  from    ${auth.toBase58()}`);
+    console.log(`  to      ${newAuthority.toBase58()} (${custody})`);
+    console.log(`  network ${RPC.replace(/\?api-key=.*/, "?api-key=***")}`);
+    console.log(`  signable here: ${check.ok ? "yes" : "NO"} — ${check.why}`);
+    if (!check.ok) {
+      console.error("\nrefusing: nothing on this network could sign for that address, so this would");
+      console.error("destroy the program's upgradeability as surely as a typo would. Pass --multisig");
+      console.error("<MULTISIG> to prove the destination is its vault, or create the multisig on this");
+      console.error("network first. --force overrides, and you should not need it.");
+      if (!argv.includes("--force")) process.exit(1);
+      console.error("\n--force given; continuing anyway.");
+    }
+    if (custody === "a single wallet") {
+      console.log("  ! that is an ordinary wallet, so this only moves the problem to another key.");
     }
   } else {
     console.log(`about to make ${PID.toBase58()} IMMUTABLE. This cannot be undone. A bug found afterwards`);
     console.log("can only be fixed by deploying a new program and migrating every listing to it.");
   }
   if (!yes) { console.log("\nre-run with --yes to send."); return; }
+
+  // The key is only needed to actually send. Checking a destination should never
+  // require one, so that a dry run works from any machine.
+  if (!fs.existsSync(keyPath)) throw new Error(`no keypair at ${keyPath} — set PAYER to the upgrade authority's key file`);
+  const signer = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(keyPath, "utf8"))));
+  if (!signer.publicKey.equals(auth)) throw new Error(`the upgrade authority is ${auth.toBase58()}, but ${keyPath} is ${signer.publicKey.toBase58()}`);
 
   const tx = new Transaction().add(setAuthorityIx(auth, newAuthority));
   const sig = await sendAndConfirmTransaction(conn, tx, [signer], { commitment: "confirmed" });
