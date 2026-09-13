@@ -21,7 +21,7 @@ export function SiteFooter({ config }: { config: AppConfig }) {
           </div>
         </div>
 
-        <div className="mt-10 grid gap-8 text-[14px] md:grid-cols-5">
+        <div className={`mt-10 grid gap-8 text-[14px] ${config.tokenMint ? "md:grid-cols-5" : "md:grid-cols-4"}`}>
           <div>
             <div className="flex items-center gap-2">
               <Logo size={28} />
@@ -36,10 +36,14 @@ export function SiteFooter({ config }: { config: AppConfig }) {
             <Link className="block text-muted hover:text-ink" href="/dashboard">My deals</Link>
             <Link className="block text-muted hover:text-ink" href="/how-it-works">How it works</Link>
           </div>
-          <div className="space-y-2">
-            <div className="kicker">Coin</div>
-            <TokenStrip />
-          </div>
+          {/* The whole column goes, heading included, until a coin exists: README promises
+              every piece of token UI hides itself rather than showing a placeholder. */}
+          {config.tokenMint && (
+            <div className="space-y-2">
+              <div className="kicker">Coin</div>
+              <TokenStrip />
+            </div>
+          )}
           <div className="space-y-2">
             <div className="kicker">Network</div>
             <div className="text-muted">Solana slot <SlotHeight /></div>

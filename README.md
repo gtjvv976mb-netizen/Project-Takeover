@@ -247,6 +247,9 @@ Anchor 0.31.1 (via `avm`).
 
 ## Before mainnet
 
+The full launch checklist, what was verified on 2026-09-13, and the researched feature
+roadmap live in [`LAUNCH.md`](LAUNCH.md). The short version:
+
 1. **Paid RPC** (Helius/Triton/QuickNode) for both `RPC_URL` and `NEXT_PUBLIC_RPC_URL`.
 2. **Escrow key custody**: the Anchor program in `programs/takeover-escrow` now exists and is tested; what remains is
    an independent audit and rewiring the API routes to build program transactions for the browser to sign, rather
