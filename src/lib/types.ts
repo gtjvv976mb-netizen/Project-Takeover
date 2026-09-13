@@ -231,6 +231,15 @@ export interface AppConfig {
    * other program-owned account; null when immutable or unknown.
    */
   upgradeCustody: "wallet" | "squads" | "program" | null;
+  /**
+   * Is the escrow program actually deployed on the cluster this deployment points at?
+   *
+   * False means the site is claiming a network where nothing can be bought or sold: the
+   * variable was changed before the program was deployed there, which looks like a
+   * working marketplace and is not one. Null means the RPC did not answer in time, which
+   * is not the same thing and must not be shown as a failure.
+   */
+  programDeployed: boolean | null;
   /** The Squads multisig the authorities are meant to live in, if one is declared. Public. */
   squadsMultisig: string | null;
   /**

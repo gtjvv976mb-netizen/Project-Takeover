@@ -13,6 +13,22 @@ function within<T>(p: Promise<T>, ms: number): Promise<T | null> {
 }
 
 /**
+ * The same, but distinguishing "the account is not there" from "the RPC did not answer".
+ *
+ * `getAccountInfo` returns null for both, so this check spent its life reporting a
+ * program that was genuinely absent as merely unverifiable — which is how a site pointed
+ * at the wrong cluster went on looking fine.
+ */
+async function settled<T>(p: Promise<T>, ms: number): Promise<{ ok: true; value: T } | { ok: false }> {
+  const marker = Symbol("timeout");
+  const r = await Promise.race([
+    p.then((value) => ({ ok: true as const, value })).catch(() => ({ ok: false as const })),
+    new Promise<typeof marker>((res) => setTimeout(() => res(marker), ms)),
+  ]);
+  return r === marker ? { ok: false } : r;
+}
+
+/**
  * Liveness for the host. Answers one question: is this process able to serve?
  *
  * It used to answer a different question — "can I reach Solana and is the program
@@ -32,8 +48,9 @@ export async function GET() {
 
   const [slot, program] = await Promise.all([
     within(connection().getSlot("confirmed"), 2000),
-    within(connection().getAccountInfo(PROGRAM_ID), 2000),
+    settled(connection().getAccountInfo(PROGRAM_ID), 3000),
   ]);
+  const programDeployed = program.ok ? Boolean(program.value?.executable) : null;
 
   return json({
     // The process answered, so it is alive. This is the only thing the platform should
@@ -45,6 +62,10 @@ export async function GET() {
     // alert, never worth a restart.
     rpcReachable: slot !== null,
     slot,
-    programDeployed: program === null ? null : Boolean(program.executable),
+    programDeployed,
+    // Explicitly false, not merely unreachable, means the site is claiming a cluster the
+    // program was never deployed to. The process is still healthy — restarting it fixes
+    // nothing — so this stays a 200 with a flag a human can alert on.
+    misconfigured: programDeployed === false,
   });
 }
