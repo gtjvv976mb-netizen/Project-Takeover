@@ -4,6 +4,11 @@
  *   node scripts/preflight.mjs                      # check devnet
  *   node scripts/preflight.mjs --mainnet            # check mainnet readiness
  *   node scripts/preflight.mjs --mainnet --site https://project-takeover.com
+ *   node scripts/preflight.mjs --mainnet --multisig <SQUADS_MULTISIG>   # or SQUADS_MULTISIG in the env
+ *
+ * A Squads vault cannot be told from a wallet by its account alone, so pass the multisig
+ * and the vaults are derived from it. Without it, a vault reads as a program-derived
+ * address: a warning, never a pass.
  *
  * A mainnet deploy costs about 5.3 SOL in rent that only comes back if the program is
  * closed, and a mistake found afterwards is a mistake you have paid for. Everything here
@@ -37,10 +42,27 @@ const SYSTEM = new PublicKey("11111111111111111111111111111111");
  * mainnet the first is a failure, not a warning: it is the thing the site tells people
  * is impossible.
  */
+const msArg = process.argv.indexOf("--multisig");
+const MULTISIG = (() => {
+  const v = msArg >= 0 ? process.argv[msArg + 1] : process.env.SQUADS_MULTISIG ?? process.env.NEXT_PUBLIC_SQUADS_MULTISIG;
+  try { return v ? new PublicKey(v) : null; } catch { return null; }
+})();
+const vaultOf = (multisig, index) => PublicKey.findProgramAddressSync(
+  [Buffer.from("multisig"), multisig.toBuffer(), Buffer.from("vault"), Buffer.from([index])], SQUADS_V4)[0];
+
 async function custodyOf(pubkey) {
-  const info = await conn.getAccountInfo(new PublicKey(pubkey)).catch(() => null);
+  const key = new PublicKey(pubkey);
+  const info = await conn.getAccountInfo(key).catch(() => null);
+  if (info?.owner.equals(SQUADS_V4)) return "a Squads multisig";
+  // A vault is an empty PDA; it is recognised by deriving it from the declared multisig.
+  if (MULTISIG) {
+    const ms = await conn.getAccountInfo(MULTISIG).catch(() => null);
+    if (ms?.owner.equals(SQUADS_V4)) {
+      for (let i = 0; i < 8; i++) if (vaultOf(MULTISIG, i).equals(key)) return "a Squads multisig";
+    }
+  }
+  if (!PublicKey.isOnCurve(key.toBytes())) return "a program-derived address (not the declared multisig)";
   if (!info || info.owner.equals(SYSTEM)) return "a single wallet";
-  if (info.owner.equals(SQUADS_V4)) return "a Squads multisig";
   return `an account owned by ${info.owner.toBase58()}`;
 }
 
@@ -55,7 +77,7 @@ const deployKey = fs.existsSync(deployKeyPath)
   ? Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(deployKeyPath, "utf8"))))
   : null;
 
-console.log(`\npreflight — ${NETWORK} — ${RPC.replace(/\?api-key=.*/, "?api-key=***")}`);
+console.log(`\npreflight — ${NETWORK} — ${RPC.replace(/\?api-key=.*/, "?api-key=***")}${MULTISIG ? ` — multisig ${MULTISIG.toBase58()}` : ""}`);
 
 /* ------------------------------------------------------------------ build */
 head("Build");

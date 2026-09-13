@@ -5,7 +5,7 @@
 // the user's own wallet and executed by the on-chain program.
 import "server-only";
 import {
-  Connection, PublicKey, SystemProgram,
+  Connection, PublicKey,
 } from "@solana/web3.js";
 import {
   unpackMint, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, ExtensionType, AccountState,
@@ -16,7 +16,7 @@ import type { AppConfig, AuthorityKind, PumpControl, TokenExtensions, TokenInfo 
 import { PROGRAM_ID, configPda } from "./program";
 import {
   bondingCurvePda, canonicalPoolPda, metadataPda, parseBondingCurve, parseMetadata, parsePool, parseSharingConfig,
-  priceFromCurve, pumpControlOf, sharingConfigPda, SQUADS_V4_PROGRAM_ID, WSOL_MINT,
+  priceFromCurve, pumpControlOf, sharingConfigPda, squadsVaultPda, SQUADS_V4_PROGRAM_ID, WSOL_MINT,
 } from "./solana-shared";
 
 /**
@@ -64,6 +64,13 @@ export const TOKEN_MINT = env("NEXT_PUBLIC_TOKEN_MINT") ?? null;
 export const TOKEN_SYMBOL = env("NEXT_PUBLIC_TOKEN_SYMBOL") ?? null;
 
 export const APP_NAME = env("APP_NAME") ?? env("NEXT_PUBLIC_APP_NAME") ?? "Project: Takeover";
+/**
+ * The Squads multisig that holds the keys, once one does. A vault is a PDA with no data
+ * and no owner of note, so it cannot be recognised from its own account; the site is
+ * told which multisig to expect and checks that the authority is one of its vaults.
+ */
+const squadsRaw = env("NEXT_PUBLIC_SQUADS_MULTISIG") ?? env("SQUADS_MULTISIG");
+export const SQUADS_MULTISIG: PublicKey | null = (() => { try { return squadsRaw ? new PublicKey(squadsRaw) : null; } catch { return null; } })();
 
 declare global {
   var __takeoverConn: Connection | undefined;
@@ -87,6 +94,7 @@ export function appConfig(): AppConfig {
     appName: APP_NAME,
     upgradeAuthority: null,
     upgradeCustody: null,
+    squadsMultisig: SQUADS_MULTISIG?.toBase58() ?? null,
   };
 }
 
@@ -121,11 +129,20 @@ async function upgradeAuthority(): Promise<{ authority: string | null; custody: 
  * is rather than letting "held by <address>" stand in for either.
  */
 export async function custodyOf(authority: PublicKey): Promise<AppConfig["upgradeCustody"]> {
-  const info = await connection().getAccountInfo(authority, "confirmed").catch(() => null);
-  // A wallet that has never received lamports has no account at all; it is still a wallet.
-  if (!info || info.owner.equals(SystemProgram.programId)) return "wallet";
-  if (info.owner.equals(SQUADS_V4_PROGRAM_ID)) return "squads";
-  return "program";
+  const conn = connection();
+  const info = await conn.getAccountInfo(authority, "confirmed").catch(() => null);
+  if (info?.owner.equals(SQUADS_V4_PROGRAM_ID)) return "squads";
+  // A Squads vault is an empty PDA, indistinguishable from a wallet by its account alone.
+  // It is recognised by deriving it from the multisig the deployment declares.
+  if (SQUADS_MULTISIG) {
+    const ms = await conn.getAccountInfo(SQUADS_MULTISIG, "confirmed").catch(() => null);
+    if (ms?.owner.equals(SQUADS_V4_PROGRAM_ID)) {
+      for (let i = 0; i < 8; i++) if (squadsVaultPda(SQUADS_MULTISIG, i).equals(authority)) return "squads";
+    }
+  }
+  // Off the curve means no private key can exist for it: some program controls it.
+  if (!PublicKey.isOnCurve(authority.toBytes())) return "program";
+  return "wallet";
 }
 
 /**

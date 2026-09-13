@@ -133,18 +133,71 @@ Two honest options, in descending order of how much they are worth:
 Doing neither, and shipping to mainnet with one laptop key able to replace the program, is
 not a middle path. It is the thing the site tells people is impossible.
 
-Both steps are one command each, signed by the current authority:
+## Runbook: moving the three powers to a Squads multisig
+
+Everything below is signed on the machine that holds the deploy key. Nothing in this
+repository can do it for you, and that is the point.
+
+**0. Create the multisig.** At app.squads.so, create a Squads v4 multisig with at least
+three members on separate devices and a 2-of-3 threshold. Add a time lock (a day is
+plenty) so any upgrade is visible before it lands. Note two addresses: the **multisig**
+(the account with the members) and its **vault 0** (the address it acts through, shown
+as the "vault" on the home tab). The vault is what receives the powers; the multisig is
+what the site and the preflight are told about. Fund the vault with a little SOL; the
+arbitrator pays its own transaction fees.
+
+**1. Upgrade authority → vault.** One transaction, signed by the deploy key.
 
 ```bash
-node scripts/upgrade-authority.mjs status                       # who holds it, and what kind of account that is
-node scripts/upgrade-authority.mjs transfer <SQUADS_VAULT> --yes # to a multisig
-node scripts/upgrade-authority.mjs burn --yes                    # immutable, after the audit
+node scripts/upgrade-authority.mjs status
+node scripts/upgrade-authority.mjs transfer <VAULT> --yes
 ```
 
-`scripts/preflight.mjs --mainnet` now **fails** while the upgrade authority, the config
-authority or the arbitrator is a plain wallet, and passes only for a Squads multisig or an
-immutable program. The site reads the same thing: `/api/config` reports `upgradeCustody`
-("wallet", "squads" or null for immutable) and /how-it-works says which it is in words.
+**2. Config authority → vault.** Two steps, because a one-step transfer to a mistyped
+address would freeze the fee, treasury and arbitrator forever. Nominate with the deploy
+key, then accept *from the vault* by executing the printed instruction in the Squads app.
+
+```bash
+node scripts/authority.mjs nominate <VAULT>
+node scripts/authority.mjs accept --print <VAULT>   # prints program id, accounts, base58 data
+```
+
+In the Squads app: Developers → Transaction builder → custom instruction, paste the
+three fields, propose, have the members approve, execute. `node scripts/authority.mjs
+status` then shows the vault as authority. Until it executes, the deploy key keeps every
+power and can `cancel`.
+
+**3. Arbitrator → vault, treasury → cold key.** Signed by the config authority, which
+after step 2 is the vault, so this is another custom instruction from the Squads app:
+`update_config(fee_bps, arbitrator, treasury)`. Do it *before* step 2 instead if you
+would rather sign it with the deploy key:
+
+```bash
+node scripts/init-program.mjs --fee-bps 500 --arbitrator <VAULT> --treasury <HARDWARE_WALLET>
+```
+
+**4. Tell the site and the preflight.** A vault is an empty address; on its own it cannot
+be told from a wallet. Set `NEXT_PUBLIC_SQUADS_MULTISIG=<MULTISIG>` in the Render
+dashboard (the blueprint leaves it unsynced) and pass the same to the preflight:
+
+```bash
+node scripts/preflight.mjs --mainnet --multisig <MULTISIG> --site https://project-takeover.com
+```
+
+`--mainnet` **fails** while the upgrade authority, the config authority or the arbitrator
+is a plain wallet, and passes only for a vault of the declared multisig or an immutable
+program. `/api/config` reports `upgradeCustody` ("wallet", "squads", "program" or null
+for immutable) and `squadsMultisig`, and /how-it-works links the multisig so a buyer can
+check the members and the time lock themselves.
+
+**5. After the audit: burn.**
+
+```bash
+node scripts/upgrade-authority.mjs burn --yes   # from the vault, so via the Squads app: loader SetAuthority with no new authority
+```
+
+Once the vault holds the upgrade authority, the burn is also a Squads transaction; the
+script's `burn` is for the case where the deploy key still holds it.
 
 **What is deliberately not done here.** Moving the upgrade authority to a second key on the
 same laptop would look like progress and would not be any. An attacker with the disk gets

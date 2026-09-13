@@ -24,6 +24,18 @@ export function bondingCurvePda(mint: PublicKey): PublicKey {
   return PublicKey.findProgramAddressSync([Buffer.from("bonding-curve"), mint.toBuffer()], PUMP_PROGRAM_ID)[0];
 }
 
+/**
+ * A Squads v4 vault: the address a multisig acts through. Seeds ["multisig", multisig,
+ * "vault", index] on the Squads program, per the Squads SDK. It is a PDA, so no private
+ * key exists for it; anything it signs was approved by the multisig's members.
+ */
+export function squadsVaultPda(multisig: PublicKey, index = 0): PublicKey {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("multisig"), multisig.toBuffer(), Buffer.from("vault"), Buffer.from([index])],
+    SQUADS_V4_PROGRAM_ID,
+  )[0];
+}
+
 /** Seeds ["sharing-config", mint] on the fee program, per pump.fun's published interface. */
 export function sharingConfigPda(mint: PublicKey): PublicKey {
   return PublicKey.findProgramAddressSync([Buffer.from("sharing-config"), mint.toBuffer()], PUMP_FEES_PROGRAM_ID)[0];

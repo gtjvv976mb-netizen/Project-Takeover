@@ -9,8 +9,8 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { Keypair, PublicKey } from "@solana/web3.js";
 import {
-  canonicalPoolPda, parseBondingCurve, parsePool, parseSharingConfig, pumpControlOf, sharingConfigPda,
-  PUMP_AMM_PROGRAM_ID, PUMP_FEES_PROGRAM_ID, WSOL_MINT,
+  canonicalPoolPda, parseBondingCurve, parsePool, parseSharingConfig, pumpControlOf, sharingConfigPda, squadsVaultPda,
+  PUMP_AMM_PROGRAM_ID, PUMP_FEES_PROGRAM_ID, SQUADS_V4_PROGRAM_ID, WSOL_MINT,
 } from "../src/lib/solana-shared";
 import type { PumpControl } from "../src/lib/types";
 
@@ -143,5 +143,17 @@ describe("who holds the creator role", () => {
   it("an unreadable creator is never a yes", () => {
     assert.equal(pumpControlOf(null, me).full, false);
     assert.equal(pumpControlOf({ raw: "cfg", source: "pool", kind: "sharing_config", config: null }, me).full, false);
+  });
+});
+
+describe("squads vault", () => {
+  it("derives the vault the way the Squads SDK does", () => {
+    const ms = k();
+    const [expected] = PublicKey.findProgramAddressSync(
+      [Buffer.from("multisig"), ms.toBuffer(), Buffer.from("vault"), Buffer.from([0])], SQUADS_V4_PROGRAM_ID);
+    assert.equal(squadsVaultPda(ms).toBase58(), expected.toBase58());
+    assert.notEqual(squadsVaultPda(ms, 1).toBase58(), expected.toBase58());
+    // A vault is off the curve: nobody can hold its private key.
+    assert.equal(PublicKey.isOnCurve(squadsVaultPda(ms).toBytes()), false);
   });
 });

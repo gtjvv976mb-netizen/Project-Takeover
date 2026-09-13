@@ -231,6 +231,8 @@ export interface AppConfig {
    * other program-owned account; null when immutable or unknown.
    */
   upgradeCustody: "wallet" | "squads" | "program" | null;
+  /** The Squads multisig the authorities are meant to live in, if one is declared. Public. */
+  squadsMultisig: string | null;
 }
 
 export interface SignedRequest {

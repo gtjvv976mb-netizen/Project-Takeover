@@ -135,10 +135,12 @@ export default function HowItWorks() {
                         {cfg.upgradeAuthority}
                       </a>
                       {cfg.upgradeCustody === "squads"
-                        ? ", a Squads multisig: several people have to sign an upgrade, and it can be seen coming before it lands. It is scheduled to be destroyed outright once the program has been audited."
+                        ? <>, a vault of {cfg.squadsMultisig ? <a className="mono break-all text-blue hover:underline" href={`https://app.squads.so/squads/${cfg.squadsMultisig}/home`} target="_blank" rel="noreferrer">this Squads multisig</a> : "a Squads multisig"}: several people have to sign an upgrade, and it can be seen coming before it lands. It is scheduled to be destroyed outright once the program has been audited.</>
                         : cfg.upgradeCustody === "wallet"
                           ? ", a single wallet. One key could deploy a version that does hold your funds. It is scheduled to be handed to a multisig, then destroyed outright once the program has been audited."
-                          : ". Whoever controls that account could deploy a version that does hold your funds."}
+                          : cfg.upgradeCustody === "program"
+                            ? ", a program-derived address: no private key exists for it, so whichever program controls it decides. It is not one we have declared, so check it yourself."
+                            : ". Whoever controls that account could deploy a version that does hold your funds."}
                       {" "}This line is read from the chain, so it will change when that happens
                       rather than waiting for someone to update the copy.
                     </>

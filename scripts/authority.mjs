@@ -4,7 +4,13 @@
  *   node scripts/authority.mjs status
  *   node scripts/authority.mjs nominate <PUBKEY>            # signed by the current authority
  *   node scripts/authority.mjs accept --keypair <PATH>      # signed by the successor
+ *   node scripts/authority.mjs accept --print <VAULT>       # the instruction, for a Squads vault to sign
  *   node scripts/authority.mjs cancel                       # withdraw a pending nomination
+ *
+ * A Squads vault has no keypair; it signs by executing a vault transaction the members
+ * approved. `accept --print` builds the accept instruction with the vault as the new
+ * authority and prints it in the form the Squads app's transaction builder takes
+ * (program id, accounts, base58 data), so the handover finishes from the multisig.
  *
  * The config authority decides the fee, the treasury and the arbitrator. Handing it to a
  * multisig is the point of this script; handing it to a mistyped address would freeze all
@@ -70,6 +76,20 @@ switch (cmd) {
   }
 
   case "accept": {
+    if (argv.includes("--print")) {
+      const vault = new PublicKey(flag("print"));
+      const ix = await prog(load(defaultKey)).methods.acceptAuthority()
+        .accountsPartial({ config: configPda, pending: pendingPda, newAuthority: vault })
+        .instruction();
+      const bs58 = (await import("bs58")).default;
+      console.log("Paste into the Squads app: Developers → Transaction builder → custom instruction\n");
+      console.log(`program id : ${ix.programId.toBase58()}`);
+      ix.keys.forEach((k, i) => console.log(`account ${i}  : ${k.pubkey.toBase58()}  ${k.isSigner ? "signer" : ""} ${k.isWritable ? "writable" : ""}`));
+      console.log(`data base58: ${bs58.encode(ix.data)}`);
+      console.log(`data base64: ${ix.data.toString("base64")}`);
+      console.log("\nThe vault is the signer. Approve and execute; nothing changes until it lands.");
+      break;
+    }
     const signer = load(flag("keypair", defaultKey));
     await prog(signer).methods.acceptAuthority()
       .accountsPartial({ config: configPda, pending: pendingPda, newAuthority: signer.publicKey })
