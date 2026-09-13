@@ -143,7 +143,18 @@ three members on separate devices and a 2-of-3 threshold. **A 1-of-1 multisig is
 multisig.** One key still proposes, approves and executes alone, so moving a power into
 it changes the diagram and not the trust; the scripts here refuse it and the site says
 so in words. Note also that the Squads app puts the **vault** address in its URL, so the
-multisig address has to be read off the page, not the address bar. Add a time lock (a day is
+multisig address has to be read off the page, not the address bar.
+
+Check what you built before trusting it with anything:
+
+```bash
+node scripts/squads.mjs <MULTISIG_OR_VAULT>     # either address works
+```
+
+It fails a threshold below 2 and warns on a missing time lock. **Four members at a
+threshold of 1 is worse than one wallet, not better**: any one of the four can approve
+and execute alone, so it is four single points of failure instead of one. The count of
+members is not the security; the threshold is. Add a time lock (a day is
 plenty) so any upgrade is visible before it lands. Note two addresses: the **multisig**
 (the account with the members) and its **vault 0** (the address it acts through, shown
 as the "vault" on the home tab). The vault is what receives the powers; the multisig is
