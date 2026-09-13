@@ -5,6 +5,7 @@ import { chainConfig } from "@/lib/solana";
 import { WalletProviders } from "@/components/WalletProviders";
 import { ConfigProvider } from "@/components/ConfigContext";
 import { Nav } from "@/components/Nav";
+import { DeploymentBanner } from "@/components/DeploymentBanner";
 import { SiteFooter } from "@/components/SiteFooter";
 import { THEME_SCRIPT } from "@/components/ThemeToggle";
 import { SITE_URL } from "@/lib/site";
@@ -67,6 +68,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body className="min-h-screen antialiased">
         <ConfigProvider config={config}>
           <WalletProviders rpcUrl={config.rpcUrl}>
+            <DeploymentBanner />
             <Nav />
             <main>{children}</main>
             <SiteFooter config={config} />

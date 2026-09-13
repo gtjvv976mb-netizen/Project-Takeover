@@ -95,6 +95,7 @@ export function appConfig(): AppConfig {
     appName: APP_NAME,
     upgradeAuthority: null,
     upgradeCustody: null,
+    programDeployed: null,
     squadsMultisig: SQUADS_MULTISIG?.toBase58() ?? null,
     squads: null,
   };
@@ -175,19 +176,26 @@ export async function chainConfig(): Promise<AppConfig> {
   const base = appConfig();
   if (cached && Date.now() - cached.at < 30_000) return cached.cfg;
   try {
-    const [info, upgrader, squads] = await Promise.all([
+    const [info, upgrader, squads, program] = await Promise.all([
       connection().getAccountInfo(configPda(), "confirmed"),
       upgradeAuthority().catch(() => null),
       squadsShape().catch(() => null),
+      // Timed out is not "missing": a slow RPC must never make the site accuse itself.
+      settled(connection().getAccountInfo(PROGRAM_ID, "confirmed"), 4000),
     ]);
+    const programDeployed = program.ok ? Boolean(program.value?.executable) : null;
     if (info) {
       // discriminator(8) authority(32) arbitrator(32) treasury(32) fee_bps(2)
       const treasury = new PublicKey(info.data.subarray(72, 104)).toBase58();
       const feeBps = info.data.readUInt16LE(104);
-      const cfg = { ...base, treasury, feeBps, upgradeAuthority: upgrader?.authority ?? null, upgradeCustody: upgrader?.custody ?? null, squads };
+      const cfg = { ...base, treasury, feeBps, upgradeAuthority: upgrader?.authority ?? null, upgradeCustody: upgrader?.custody ?? null, squads, programDeployed };
       cached = { at: Date.now(), cfg };
       return cfg;
     }
+    // No config account, but the program's presence is still worth reporting: a site
+    // pointed at a cluster the program was never deployed to is the failure this exists
+    // to make loud, and it has no config account either.
+    return { ...base, programDeployed };
   } catch {
     // fall through to the env-var view rather than failing the whole page
   }
@@ -212,6 +220,22 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | null> {
     promise.catch(() => null),
     new Promise<null>((r) => setTimeout(() => r(null), ms)),
   ]);
+}
+
+/**
+ * Like `withTimeout`, but able to tell "the answer is nothing" from "there was no answer".
+ *
+ * `getAccountInfo` returns null for an account that does not exist, and a timed-out call
+ * returns null too, so collapsing both into null loses exactly the distinction that
+ * matters here: a missing program is a misconfigured site, an unreachable RPC is not.
+ */
+async function settled<T>(promise: Promise<T>, ms: number): Promise<{ ok: true; value: T } | { ok: false }> {
+  const marker = Symbol("timeout");
+  const result = await Promise.race([
+    promise.then((value) => ({ ok: true as const, value })).catch(() => ({ ok: false as const })),
+    new Promise<typeof marker>((r) => setTimeout(() => r(marker), ms)),
+  ]);
+  return result === marker ? { ok: false } : result;
 }
 
 function tokenProgramOf(owner: PublicKey): PublicKey {
