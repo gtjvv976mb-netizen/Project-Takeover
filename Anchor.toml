@@ -8,7 +8,7 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-takeover_escrow = "B6sQ8s6rikSPqwPhm6XPpy16mVuJ87raCcVFXMA6sSVG"
+takeover_escrow = "EFtuX87WAqxfg3LkJE2rW79NC8Yka7RarJiSUGeSNPvu"
 
 [registry]
 url = "https://api.apr.dev"

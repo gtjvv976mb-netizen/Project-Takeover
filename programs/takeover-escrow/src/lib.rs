@@ -31,7 +31,7 @@ pub mod state;
 pub use errors::EscrowError;
 pub use state::*;
 
-declare_id!("B6sQ8s6rikSPqwPhm6XPpy16mVuJ87raCcVFXMA6sSVG");
+declare_id!("EFtuX87WAqxfg3LkJE2rW79NC8Yka7RarJiSUGeSNPvu");
 
 /// Metaplex Token Metadata.
 pub const METADATA_PROGRAM_ID: Pubkey = pubkey!("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
