@@ -80,6 +80,7 @@ That means a compromise of this server gets an attacker a defaced website, not a
 ## Run the program locally
 
 ```bash
+npm run fixtures                            # fetch the Metaplex program the tests load
 npm run program:build                       # compile + regenerate the IDL
 solana-test-validator --reset \
   --bpf-program metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s tests/fixtures/mpl_token_metadata.so
@@ -153,8 +154,8 @@ Set `ADMIN_PUBKEYS` to the wallet(s) allowed to resolve disputes via `POST /api/
 with the Metaplex program loaded:
 
 ```bash
-solana program dump metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s mpl.so -u mainnet-beta
-solana-test-validator --reset --bpf-program metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s mpl.so
+npm run fixtures    # or: solana program dump metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s mpl.so -u mainnet-beta
+solana-test-validator --reset --bpf-program metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s tests/fixtures/mpl_token_metadata.so
 ```
 
 Then, with `RPC_URL=http://127.0.0.1:8899` in `.env.local` and the dev server running:
