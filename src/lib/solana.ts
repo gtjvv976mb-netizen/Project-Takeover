@@ -16,7 +16,8 @@ import type { AppConfig, AuthorityKind, PumpControl, TokenExtensions, TokenInfo 
 import { PROGRAM_ID, configPda } from "./program";
 import {
   bondingCurvePda, canonicalPoolPda, metadataPda, parseBondingCurve, parseMetadata, parsePool, parseSharingConfig,
-  priceFromCurve, pumpControlOf, sharingConfigPda, squadsVaultPda, SQUADS_V4_PROGRAM_ID, WSOL_MINT,
+  parseSquadsMultisig, priceFromCurve, pumpControlOf, sharingConfigPda, squadsVaultPda,
+  SQUADS_V4_PROGRAM_ID, WSOL_MINT,
 } from "./solana-shared";
 
 /**
@@ -95,7 +96,17 @@ export function appConfig(): AppConfig {
     upgradeAuthority: null,
     upgradeCustody: null,
     squadsMultisig: SQUADS_MULTISIG?.toBase58() ?? null,
+    squads: null,
   };
+}
+
+/** The declared multisig's threshold, members and time lock, read from chain. */
+export async function squadsShape(): Promise<AppConfig["squads"]> {
+  if (!SQUADS_MULTISIG) return null;
+  const info = await connection().getAccountInfo(SQUADS_MULTISIG, "confirmed").catch(() => null);
+  if (!info?.owner.equals(SQUADS_V4_PROGRAM_ID)) return null;
+  const ms = parseSquadsMultisig(info.data);
+  return ms ? { threshold: ms.threshold, members: ms.memberCount, timeLockSeconds: ms.timeLock } : null;
 }
 
 /** The loader that owns every upgradeable program's ProgramData account. */
@@ -164,15 +175,16 @@ export async function chainConfig(): Promise<AppConfig> {
   const base = appConfig();
   if (cached && Date.now() - cached.at < 30_000) return cached.cfg;
   try {
-    const [info, upgrader] = await Promise.all([
+    const [info, upgrader, squads] = await Promise.all([
       connection().getAccountInfo(configPda(), "confirmed"),
       upgradeAuthority().catch(() => null),
+      squadsShape().catch(() => null),
     ]);
     if (info) {
       // discriminator(8) authority(32) arbitrator(32) treasury(32) fee_bps(2)
       const treasury = new PublicKey(info.data.subarray(72, 104)).toBase58();
       const feeBps = info.data.readUInt16LE(104);
-      const cfg = { ...base, treasury, feeBps, upgradeAuthority: upgrader?.authority ?? null, upgradeCustody: upgrader?.custody ?? null };
+      const cfg = { ...base, treasury, feeBps, upgradeAuthority: upgrader?.authority ?? null, upgradeCustody: upgrader?.custody ?? null, squads };
       cached = { at: Date.now(), cfg };
       return cfg;
     }

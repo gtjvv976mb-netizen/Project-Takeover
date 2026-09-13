@@ -139,6 +139,40 @@ export function updateMetadataAuthorityIx(mint: PublicKey, currentAuthority: Pub
   });
 }
 
+/** Anchor discriminator of the Squads v4 Multisig account: sha256("account:Multisig")[0..8]. */
+const SQUADS_MULTISIG_DISCRIMINATOR = Buffer.from([224, 116, 121, 186, 68, 161, 79, 236]);
+
+/**
+ * Read a Squads v4 multisig's shape.
+ *
+ * Layout after the discriminator: create_key, config_authority, threshold u16,
+ * time_lock u32, transaction_index u64, stale_transaction_index u64,
+ * Option<rent_collector>, bump u8, then a Borsh vec of {key, permissions u8}.
+ *
+ * Threshold and member count are the whole point. A 1-of-1 multisig is a wallet wearing
+ * a multisig's clothes: one key still proposes, approves and executes alone, so nothing
+ * about the trust story changes. Anything reading this should say so rather than report
+ * "a multisig" and let the word do work the configuration does not.
+ */
+export function parseSquadsMultisig(data: Uint8Array) {
+  const b = Buffer.from(data);
+  if (b.length < 60 || !b.subarray(0, 8).equals(SQUADS_MULTISIG_DISCRIMINATOR)) return null;
+  let o = 8 + 32 + 32; // create_key, config_authority
+  const threshold = b.readUInt16LE(o); o += 2;
+  const timeLock = b.readUInt32LE(o); o += 4;
+  o += 8 + 8; // transaction_index, stale_transaction_index
+  o += b[o] === 1 ? 33 : 1; // Option<rent_collector>
+  o += 1; // bump
+  if (o + 4 > b.length) return null;
+  const memberCount = b.readUInt32LE(o); o += 4;
+  const members: string[] = [];
+  for (let i = 0; i < memberCount && o + 33 <= b.length; i++) {
+    members.push(new PublicKey(b.subarray(o, o + 32)).toBase58());
+    o += 33; // 32-byte key + 1-byte permission mask
+  }
+  return { threshold, memberCount, timeLock, members };
+}
+
 /** Anchor discriminator of pump.fun's SharingConfig account, from its published interface. */
 const SHARING_CONFIG_DISCRIMINATOR = Buffer.from([216, 74, 9, 0, 56, 140, 93, 75]);
 /** Anchor discriminator of PumpSwap's Pool account. */

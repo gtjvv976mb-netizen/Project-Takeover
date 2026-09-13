@@ -139,7 +139,11 @@ Everything below is signed on the machine that holds the deploy key. Nothing in 
 repository can do it for you, and that is the point.
 
 **0. Create the multisig.** At app.squads.so, create a Squads v4 multisig with at least
-three members on separate devices and a 2-of-3 threshold. Add a time lock (a day is
+three members on separate devices and a 2-of-3 threshold. **A 1-of-1 multisig is not a
+multisig.** One key still proposes, approves and executes alone, so moving a power into
+it changes the diagram and not the trust; the scripts here refuse it and the site says
+so in words. Note also that the Squads app puts the **vault** address in its URL, so the
+multisig address has to be read off the page, not the address bar. Add a time lock (a day is
 plenty) so any upgrade is visible before it lands. Note two addresses: the **multisig**
 (the account with the members) and its **vault 0** (the address it acts through, shown
 as the "vault" on the home tab). The vault is what receives the powers; the multisig is
@@ -154,7 +158,8 @@ node scripts/upgrade-authority.mjs transfer <VAULT> --multisig <MULTISIG>       
 node scripts/upgrade-authority.mjs transfer <VAULT> --multisig <MULTISIG> --yes
 ```
 
-`--multisig` is not decoration. A Squads vault can only be signed for on the network
+`--multisig` is not decoration, and the transfer also refuses a multisig whose threshold
+is 1: it would be a single key with extra steps. A Squads vault can only be signed for on the network
 where its multisig account lives, so a vault created in the app on mainnet is inert on
 devnet: handing a devnet program to it would leave nobody able to upgrade it, ever. The
 script therefore refuses any destination off the ed25519 curve unless the named multisig

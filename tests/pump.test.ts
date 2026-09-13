@@ -9,8 +9,8 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { Keypair, PublicKey } from "@solana/web3.js";
 import {
-  canonicalPoolPda, parseBondingCurve, parsePool, parseSharingConfig, pumpControlOf, sharingConfigPda, squadsVaultPda,
-  PUMP_AMM_PROGRAM_ID, PUMP_FEES_PROGRAM_ID, SQUADS_V4_PROGRAM_ID, WSOL_MINT,
+  canonicalPoolPda, parseBondingCurve, parsePool, parseSharingConfig, parseSquadsMultisig, pumpControlOf,
+  sharingConfigPda, squadsVaultPda, PUMP_AMM_PROGRAM_ID, PUMP_FEES_PROGRAM_ID, SQUADS_V4_PROGRAM_ID, WSOL_MINT,
 } from "../src/lib/solana-shared";
 import type { PumpControl } from "../src/lib/types";
 
@@ -155,5 +155,46 @@ describe("squads vault", () => {
     assert.notEqual(squadsVaultPda(ms, 1).toBase58(), expected.toBase58());
     // A vault is off the curve: nobody can hold its private key.
     assert.equal(PublicKey.isOnCurve(squadsVaultPda(ms).toBytes()), false);
+  });
+});
+
+/** A Squads v4 Multisig account, laid out as the program stores it. */
+function multisig(o: { threshold: number; timeLock?: number; members: PublicKey[]; rentCollector?: boolean }) {
+  return Buffer.concat([
+    Buffer.from([224, 116, 121, 186, 68, 161, 79, 236]),
+    k().toBuffer(), // create_key
+    PublicKey.default.toBuffer(), // config_authority
+    u16(o.threshold), u32(o.timeLock ?? 0),
+    u64(7), u64(0), // transaction_index, stale_transaction_index
+    o.rentCollector ? Buffer.concat([Buffer.from([1]), k().toBuffer()]) : Buffer.from([0]),
+    Buffer.from([251]), // bump
+    u32(o.members.length),
+    ...o.members.map((m) => Buffer.concat([m.toBuffer(), Buffer.from([7])])),
+  ]);
+}
+
+describe("squads multisig shape", () => {
+  it("reads threshold, members and time lock", () => {
+    const members = [k(), k(), k()];
+    const ms = parseSquadsMultisig(multisig({ threshold: 2, timeLock: 86_400, members }))!;
+    assert.equal(ms.threshold, 2);
+    assert.equal(ms.memberCount, 3);
+    assert.equal(ms.timeLock, 86_400);
+    assert.deepEqual(ms.members, members.map((m) => m.toBase58()));
+  });
+  it("reads a 1-of-1 as exactly that, so nothing can call it custody", () => {
+    const ms = parseSquadsMultisig(multisig({ threshold: 1, members: [k()] }))!;
+    assert.equal(ms.threshold, 1);
+    assert.equal(ms.memberCount, 1);
+    assert.equal(ms.timeLock, 0);
+  });
+  it("handles the optional rent collector without losing the members", () => {
+    const ms = parseSquadsMultisig(multisig({ threshold: 3, members: [k(), k(), k(), k()], rentCollector: true }))!;
+    assert.equal(ms.threshold, 3);
+    assert.equal(ms.memberCount, 4);
+  });
+  it("refuses anything that is not a multisig", () => {
+    assert.equal(parseSquadsMultisig(bondingCurve({ creator: k() })), null);
+    assert.equal(parseSquadsMultisig(Buffer.alloc(8)), null);
   });
 });

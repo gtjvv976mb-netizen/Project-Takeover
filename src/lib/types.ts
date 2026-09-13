@@ -233,6 +233,11 @@ export interface AppConfig {
   upgradeCustody: "wallet" | "squads" | "program" | null;
   /** The Squads multisig the authorities are meant to live in, if one is declared. Public. */
   squadsMultisig: string | null;
+  /**
+   * That multisig's actual shape. A 1-of-1 is a single key with extra steps, so the
+   * numbers are reported rather than the word: a reader can judge for themselves.
+   */
+  squads: { threshold: number; members: number; timeLockSeconds: number } | null;
 }
 
 export interface SignedRequest {

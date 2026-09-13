@@ -50,20 +50,48 @@ const MULTISIG = (() => {
 const vaultOf = (multisig, index) => PublicKey.findProgramAddressSync(
   [Buffer.from("multisig"), multisig.toBuffer(), Buffer.from("vault"), Buffer.from([index])], SQUADS_V4)[0];
 
+/**
+ * Read the declared multisig once: its threshold and member count decide whether being
+ * "in a multisig" means anything. A 1-of-1 is one key that proposes, approves and
+ * executes alone, so it is reported as what it is rather than as custody.
+ */
+let msShape;
+async function multisigShape() {
+  if (msShape !== undefined) return msShape;
+  msShape = null;
+  if (MULTISIG) {
+    const info = await conn.getAccountInfo(MULTISIG).catch(() => null);
+    if (info?.owner.equals(SQUADS_V4)) {
+      const b = info.data;
+      let o = 8 + 32 + 32;
+      const threshold = b.readUInt16LE(o); o += 2;
+      const timeLock = b.readUInt32LE(o); o += 4;
+      o += 16;
+      o += b[o] === 1 ? 33 : 1;
+      o += 1;
+      const members = b.readUInt32LE(o);
+      msShape = { threshold, members, timeLock };
+    }
+  }
+  return msShape;
+}
+
 async function custodyOf(pubkey) {
   const key = new PublicKey(pubkey);
   const info = await conn.getAccountInfo(key).catch(() => null);
-  if (info?.owner.equals(SQUADS_V4)) return "a Squads multisig";
-  // A vault is an empty PDA; it is recognised by deriving it from the declared multisig.
-  if (MULTISIG) {
-    const ms = await conn.getAccountInfo(MULTISIG).catch(() => null);
-    if (ms?.owner.equals(SQUADS_V4)) {
-      for (let i = 0; i < 8; i++) if (vaultOf(MULTISIG, i).equals(key)) return "a Squads multisig";
-    }
+  const shape = await multisigShape();
+  const label = shape
+    ? (shape.threshold < 2
+        ? `a ${shape.threshold}-of-${shape.members} Squads multisig — one key still decides alone`
+        : `a ${shape.threshold}-of-${shape.members} Squads multisig${shape.timeLock ? `, ${Math.round(shape.timeLock / 3600)}h time lock` : ", no time lock"}`)
+    : "a Squads multisig";
+  if (info?.owner.equals(SQUADS_V4)) return { label, ok: false, note: "that is the multisig account itself, not one of its vaults" };
+  if (MULTISIG && shape) {
+    for (let i = 0; i < 8; i++) if (vaultOf(MULTISIG, i).equals(key)) return { label, ok: shape.threshold >= 2 };
   }
-  if (!PublicKey.isOnCurve(key.toBytes())) return "a program-derived address (not the declared multisig)";
-  if (!info || info.owner.equals(SYSTEM)) return "a single wallet";
-  return `an account owned by ${info.owner.toBase58()}`;
+  if (!PublicKey.isOnCurve(key.toBytes())) return { label: "a program-derived address (not the declared multisig)", ok: false };
+  if (!info || info.owner.equals(SYSTEM)) return { label: "a single wallet", ok: false };
+  return { label: `an account owned by ${info.owner.toBase58()}`, ok: false };
 }
 
 let fails = 0, warns = 0;
@@ -120,9 +148,9 @@ if (!programInfo) {
     else if (MAINNET && deployKey && authority === deployKey.publicKey.toBase58())
       fail("upgrade authority is the local deploy key", "a laptop key can replace the program and drain every escrow");
     else {
-      const custody = await custodyOf(authority);
-      if (custody === "a Squads multisig") warn("program is upgradeable by a Squads multisig", `${authority} — burn with --final after the audit`);
-      else (MAINNET ? fail : warn)(`program is upgradeable by ${custody}`, `${authority} — run: node scripts/upgrade-authority.mjs transfer <SQUADS_VAULT>`);
+      const c = await custodyOf(authority);
+      if (c.ok) warn(`program is upgradeable by ${c.label}`, `${authority} — burn with --final after the audit`);
+      else (MAINNET ? fail : warn)(`program is upgradeable by ${c.label}`, `${authority}${c.note ? ` — ${c.note}` : ""} — see KEYS.md`);
     }
   }
 }
@@ -154,9 +182,9 @@ if (!cfgInfo) {
   // The config authority can point the treasury anywhere and the arbitrator can rule
   // every dispute; neither should be one person's hot key on mainnet.
   for (const role of ["authority", "arbitrator"]) {
-    const custody = await custodyOf(roles[role]);
-    if (custody === "a Squads multisig") pass(`${role} is a Squads multisig`, roles[role]);
-    else (MAINNET ? fail : warn)(`${role} is ${custody}`, `${roles[role]} — see KEYS.md`);
+    const c = await custodyOf(roles[role]);
+    if (c.ok) pass(`${role} is ${c.label}`, roles[role]);
+    else (MAINNET ? fail : warn)(`${role} is ${c.label}`, `${roles[role]}${c.note ? ` — ${c.note}` : ""} — see KEYS.md`);
   }
 }
 

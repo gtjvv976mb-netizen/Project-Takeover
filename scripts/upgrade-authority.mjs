@@ -89,8 +89,19 @@ async function verifyVault(target) {
   if (!ms) return { ok: false, why: `multisig ${MULTISIG.toBase58()} does not exist on this network — a vault of it cannot sign here` };
   if (!ms.owner.equals(SQUADS_V4)) return { ok: false, why: `${MULTISIG.toBase58()} exists but is not a Squads multisig (owner ${ms.owner.toBase58()})` };
   const i = isVaultOf(target, MULTISIG);
-  if (i !== null) return { ok: true, why: `vault ${i} of Squads multisig ${MULTISIG.toBase58()}, which exists on this network` };
-  return { ok: false, why: `not a vault (0-7) of multisig ${MULTISIG.toBase58()}` };
+  if (i === null) return { ok: false, why: `not a vault (0-7) of multisig ${MULTISIG.toBase58()}` };
+  const b = ms.data;
+  let o = 8 + 32 + 32;
+  const threshold = b.readUInt16LE(o); o += 2;
+  const timeLock = b.readUInt32LE(o); o += 4;
+  o += 16; o += b[o] === 1 ? 33 : 1; o += 1;
+  const members = b.readUInt32LE(o);
+  const shape = `${threshold}-of-${members}${timeLock ? `, ${Math.round(timeLock / 3600)}h time lock` : ", no time lock"}`;
+  return {
+    ok: true,
+    weak: threshold < 2,
+    why: `vault ${i} of Squads multisig ${MULTISIG.toBase58()} (${shape}), which exists on this network`,
+  };
 }
 
 /** BPF upgradeable loader `SetAuthority`: u32 LE instruction index 4. */
@@ -135,6 +146,14 @@ async function change(newAuthority) {
     }
     if (custody === "a single wallet") {
       console.log("  ! that is an ordinary wallet, so this only moves the problem to another key.");
+    }
+    if (check.weak) {
+      console.log("\n  ! that multisig needs only one approval, so one key still proposes, approves and");
+      console.log("    executes alone. Moving the upgrade authority there changes the diagram, not the");
+      console.log("    trust: the site would still be trusting a single key. Raise the threshold to at");
+      console.log("    least 2 of 3 in the Squads app first, and add a time lock while you are there.");
+      if (!argv.includes("--force")) { console.error("\nrefusing. --force overrides."); process.exit(1); }
+      console.error("  --force given; continuing anyway.");
     }
   } else {
     console.log(`about to make ${PID.toBase58()} IMMUTABLE. This cannot be undone. A bug found afterwards`);
