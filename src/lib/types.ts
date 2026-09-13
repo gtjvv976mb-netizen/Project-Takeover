@@ -25,6 +25,19 @@ export interface OffchainAsset {
   category: "project" | "website" | "domain" | "socials" | "wallet_bundle" | "other";
   links: string[];
   deliverables: string; // what the buyer receives, in the seller's words
+  /**
+   * Proof that the seller controls a domain among `links`, via a DNS TXT record.
+   *
+   * Off-chain listings are the only kind with no on-chain fact behind them: anyone can
+   * type a sentence about somebody else's website. DNS is the exception, because only
+   * the domain's controller can publish a TXT record. Absent or false means unproven,
+   * which is not the same as fraudulent and is never displayed as though it were.
+   */
+  domainVerified?: boolean;
+  /** The host that was proven, for display. */
+  verifiedHost?: string | null;
+  /** When the proof was last confirmed, so a stale one can be re-checked. */
+  verifiedAt?: number | null;
 }
 
 export type ListingAsset = TokenAuthorityAsset | PumpCreatorAsset | OffchainAsset;
@@ -174,6 +187,16 @@ export interface Listing {
   disputeReason: string | null;
   createdAt: number;
   updatedAt: number;
+}
+
+/** A report filed against a listing by someone who says it should not be there. */
+export interface ListingReport {
+  id: number;
+  listingId: string;
+  reporter: string;
+  reason: string;
+  createdAt: number;
+  resolvedAt: number | null;
 }
 
 export interface ListingEvent {

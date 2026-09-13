@@ -1,6 +1,6 @@
 import path from "node:path";
 import fs from "node:fs";
-import type { BuilderProfile, BuilderStats, Listing, ListingEvent, ListingStatus, TokenInfo, WantedEntry, WantedRow } from "./types";
+import type { BuilderProfile, BuilderStats, Listing, ListingEvent, ListingReport, ListingStatus, TokenInfo, WantedEntry, WantedRow } from "./types";
 
 // node:sqlite is a Node 22.13+/24 built-in. We resolve it through
 // process.getBuiltinModule so the Next.js bundler leaves it alone.
@@ -74,6 +74,16 @@ function open() {
       website TEXT NOT NULL DEFAULT '',
       updated_at INTEGER NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS reports (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      listing_id TEXT NOT NULL,
+      reporter TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      resolved_at INTEGER,
+      UNIQUE (listing_id, reporter)
+    );
+    CREATE INDEX IF NOT EXISTS idx_reports_listing ON reports(listing_id);
     CREATE TABLE IF NOT EXISTS used_signatures (
       signature TEXT PRIMARY KEY,
       purpose TEXT NOT NULL,
@@ -190,6 +200,50 @@ export function claimSignature(signature: string, purpose: string, listingId: st
     if (code === 19 || code === 1555 || code === "ERR_SQLITE_ERROR" && /UNIQUE|constraint/i.test((e as Error).message)) return false;
     throw e;
   }
+}
+
+/**
+ * File a report against a listing.
+ *
+ * One per wallet per listing, enforced by the unique index rather than by a read-then-write,
+ * so two simultaneous reports cannot both pass a check and then both insert. A repeat from
+ * the same wallet returns false rather than erroring: it is not a failure, it is a duplicate.
+ */
+export function addReport(listingId: string, reporter: string, reason: string): boolean {
+  try {
+    db().prepare(`INSERT INTO reports (listing_id, reporter, reason, created_at) VALUES (?,?,?,?)`)
+      .run(listingId, reporter, reason, Date.now());
+    addEvent(listingId, "reported", { reporter });
+    return true;
+  } catch (e) {
+    const code = (e as { errcode?: number }).errcode;
+    if (code === 19 || code === 2067 || /UNIQUE|constraint/i.test((e as Error).message)) return false;
+    throw e;
+  }
+}
+
+/** How many unresolved reports a listing carries. Shown to admins, and counted on the listing. */
+export function reportCount(listingId: string): number {
+  const r = db().prepare(`SELECT count(*) AS c FROM reports WHERE listing_id = ? AND resolved_at IS NULL`).get(listingId) as Row;
+  return Number(r.c);
+}
+
+/** Every open report, newest first, for the admin view. */
+export function openReports(limit = 100): ListingReport[] {
+  return (db().prepare(
+    `SELECT * FROM reports WHERE resolved_at IS NULL ORDER BY created_at DESC LIMIT ?`
+  ).all(limit) as Row[]).map((r) => ({
+    id: Number(r.id),
+    listingId: r.listing_id as string,
+    reporter: r.reporter as string,
+    reason: r.reason as string,
+    createdAt: Number(r.created_at),
+    resolvedAt: r.resolved_at === null ? null : Number(r.resolved_at),
+  }));
+}
+
+export function resolveReports(listingId: string) {
+  db().prepare(`UPDATE reports SET resolved_at = ? WHERE listing_id = ? AND resolved_at IS NULL`).run(Date.now(), listingId);
 }
 
 export function getBuilder(wallet: string): BuilderProfile | null {

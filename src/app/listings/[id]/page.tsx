@@ -2,7 +2,7 @@
 import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
-import { api, signedPost, type Handover } from "@/lib/client/api";
+import { api, signedPost, type DomainProofResult, type Handover } from "@/lib/client/api";
 import { buyTokenOnChain, cancelOnChain, disputeOnChain, fundOnChain, refundOnChain, releaseOnChain } from "@/lib/client/program";
 import { explorerUrl, useConfig } from "@/components/ConfigContext";
 import { Alert, Button, Chip, inputCls, StatusBadge, TypeBadge } from "@/components/ui";
@@ -24,6 +24,10 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
   const [note, setNote] = useState("");
   /** For pump.fun listings: who holds the creator role right now, read live and resolved through any fee split. */
   const [handover, setHandover] = useState<Handover | null>(null);
+  /** For off-chain listings: whether the seller has proven control of a domain they link to. */
+  const [proof, setProof] = useState<DomainProofResult | null>(null);
+  const [reports, setReports] = useState<number>(0);
+  const [reportReason, setReportReason] = useState("");
   /** Deadline comes from the chain, not the index, so a stale row cannot hide a refund. */
   const [deadline, setDeadline] = useState<number | null>(null);
   /** Ticks once a minute so the refund button appears the moment the window closes. */
@@ -39,6 +43,8 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
     setL(r.listing);
     setEvents(r.events);
     if (r.listing.type === "pump_creator") api.handover(id).then(setHandover).catch(() => setHandover(null));
+    if (r.listing.type === "offchain") api.domainProof(id).then(setProof).catch(() => setProof(null));
+    api.reports(id).then((x) => setReports(x.reports)).catch(() => {});
     // refresh the authoritative state from the program itself
     try {
       const chain = await fetch(`/api/listings/${id}/sync`, { method: "POST" }).then((x) => x.json());
@@ -161,6 +167,20 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
           )}
           {l.type === "offchain" && (
             <div className="space-y-2 text-muted">
+              {/* Nothing on chain says who owns a website, so the page states plainly which
+                  kind of claim this is rather than letting the buyer assume it was checked. */}
+              <Alert kind={proof?.verified ? "success" : "warn"}>
+                {proof?.verified ? (
+                  <><strong>Domain verified.</strong> {proof.verifiedHost} publishes a DNS record naming this seller&apos;s wallet, so they control it.</>
+                ) : (
+                  <><strong>Unverified.</strong> Nothing proves this seller controls what they are selling. Off-chain assets cannot be checked on chain. Your SOL stays in escrow until you say you received it, and the deadline refunds you if you never do — but judge the seller before you fund anything.</>
+                )}
+              </Alert>
+              {reports > 0 && (
+                <Alert kind="error">
+                  <strong>{reports} {reports === 1 ? "person has" : "people have"} reported this listing.</strong> Reports are not proof, and they do not remove a listing on their own. Read it carefully.
+                </Alert>
+              )}
               <div>Category: {OFFCHAIN_CATEGORY_LABELS[(l.asset as OffchainAsset).category] ?? (l.asset as OffchainAsset).category}</div>
               {(l.asset as OffchainAsset).links.length > 0 && <ul className="list-disc pl-5">{(l.asset as OffchainAsset).links.map((u) => <li key={u}><a className="text-blue underline" href={u} target="_blank" rel="noreferrer">{u}</a></li>)}</ul>}
               <div className="whitespace-pre-wrap bg-bg-2 p-3">{(l.asset as OffchainAsset).deliverables}</div>
@@ -248,8 +268,52 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
         {isSeller && l.status === "draft" && (
           <Link href="/sell"><Alert kind="warn">Not live yet: the controls are still yours. Finish handing them over on the Sell page, or cancel below.</Alert></Link>
         )}
+        {isSeller && l.type === "offchain" && !proof?.verified && (
+          <div className="space-y-2 rounded-xl border border-line bg-bg-2 p-3 text-xs">
+            <div className="kicker">Prove you own it</div>
+            <p className="text-muted">
+              Add this TXT record to your domain&apos;s DNS, at the root or on <span className="mono">_takeover</span>, then check below.
+              Buyers see &ldquo;Unverified seller&rdquo; until you do.
+            </p>
+            <div className="mono break-all rounded bg-bg p-2 text-ink">{proof?.expectedRecord ?? `takeover-verify=${l.seller}`}</div>
+            <Button className="w-full" variant="secondary" disabled={!!busy}
+              onClick={() => run("Checking DNS…", async () => {
+                const r = await signedPost<DomainProofResult>(wallet, `/api/listings/${l.id}/verify-domain`, "verify-domain", l.id, {});
+                setProof(r);
+                if (!r.verified) throw new Error(r.proofs[0]?.detail ?? "No matching TXT record found yet. DNS changes can take a few minutes.");
+                setNotice(`Verified ${r.verifiedHost}`);
+              })}>
+              {busy ?? "Check my DNS record"}
+            </Button>
+          </div>
+        )}
         {isSeller && (l.status === "draft" || l.status === "active") && (
           <Button className="w-full" variant="danger" onClick={cancel} disabled={!!busy}>{busy ?? "Cancel listing"}</Button>
+        )}
+        {/* Shown to everyone, not only to connected wallets: the person most likely to spot
+            a fraudulent listing is the owner of the thing being sold, and they arrive from a
+            link with no reason to have connected anything. Hiding the control from them
+            would hide it from exactly the reader it exists for. */}
+        {!isSeller && (
+          <details className="rounded-xl border border-line bg-bg-2 p-3 text-xs">
+            <summary className="cursor-pointer text-muted">Is this your project? Report this listing</summary>
+            <p className="mt-2 text-muted">
+              Reporting queues it for review. It does not take the listing down on its own, because that would hand anybody a button to erase a competitor.
+            </p>
+            {!me && <p className="mt-2 text-muted">Connect a wallet to report. A report is signed, so it is attributable and one wallet counts once.</p>}
+            <textarea className={`${inputCls} mt-2`} rows={3} disabled={!me}
+              placeholder="What is wrong with this listing? Say who you are and what you own."
+              value={reportReason} onChange={(e) => setReportReason(e.target.value)} />
+            <Button className="mt-2 w-full" variant="secondary" disabled={!!busy || !me || reportReason.trim().length < 10}
+              onClick={() => run("Filing report…", async () => {
+                const r = await signedPost<{ filed: boolean; reports: number }>(wallet, `/api/listings/${l.id}/report`, "report", l.id, { reason: reportReason.trim() });
+                setReports(r.reports);
+                setReportReason("");
+                setNotice(r.filed ? "Reported. An admin will review it." : "You have already reported this listing.");
+              })}>
+              {busy ?? "Report"}
+            </Button>
+          </details>
         )}
         {isSeller && l.status === "paid" && (
           <div className="space-y-2">
