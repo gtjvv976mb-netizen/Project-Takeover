@@ -133,6 +133,19 @@ Two honest options, in descending order of how much they are worth:
 Doing neither, and shipping to mainnet with one laptop key able to replace the program, is
 not a middle path. It is the thing the site tells people is impossible.
 
+Both steps are one command each, signed by the current authority:
+
+```bash
+node scripts/upgrade-authority.mjs status                       # who holds it, and what kind of account that is
+node scripts/upgrade-authority.mjs transfer <SQUADS_VAULT> --yes # to a multisig
+node scripts/upgrade-authority.mjs burn --yes                    # immutable, after the audit
+```
+
+`scripts/preflight.mjs --mainnet` now **fails** while the upgrade authority, the config
+authority or the arbitrator is a plain wallet, and passes only for a Squads multisig or an
+immutable program. The site reads the same thing: `/api/config` reports `upgradeCustody`
+("wallet", "squads" or null for immutable) and /how-it-works says which it is in words.
+
 **What is deliberately not done here.** Moving the upgrade authority to a second key on the
 same laptop would look like progress and would not be any. An attacker with the disk gets
 both. The only changes that mean anything are a multisig or `--final`, and both need

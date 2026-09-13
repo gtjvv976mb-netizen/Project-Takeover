@@ -28,6 +28,21 @@ const idl = JSON.parse(fs.readFileSync("src/idl/takeover_escrow.json", "utf8"));
 const PID = new PublicKey(idl.address);
 const configPda = PublicKey.findProgramAddressSync([Buffer.from("config")], PID)[0];
 const BPF_LOADER = new PublicKey("BPFLoaderUpgradeab1e11111111111111111111111");
+const SQUADS_V4 = new PublicKey("SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf");
+const SYSTEM = new PublicKey("11111111111111111111111111111111");
+
+/**
+ * What kind of account holds a power. A plain wallet is one signature from anything; a
+ * Squads multisig needs several and, with a time lock, is visible before it acts. On
+ * mainnet the first is a failure, not a warning: it is the thing the site tells people
+ * is impossible.
+ */
+async function custodyOf(pubkey) {
+  const info = await conn.getAccountInfo(new PublicKey(pubkey)).catch(() => null);
+  if (!info || info.owner.equals(SYSTEM)) return "a single wallet";
+  if (info.owner.equals(SQUADS_V4)) return "a Squads multisig";
+  return `an account owned by ${info.owner.toBase58()}`;
+}
 
 let fails = 0, warns = 0;
 const pass = (m, d = "") => console.log(`  \x1b[32m✓\x1b[0m ${m}${d ? `  ${d}` : ""}`);
@@ -82,7 +97,11 @@ if (!programInfo) {
     if (!upgradeable) pass("program is IMMUTABLE", "nobody can replace it");
     else if (MAINNET && deployKey && authority === deployKey.publicKey.toBase58())
       fail("upgrade authority is the local deploy key", "a laptop key can replace the program and drain every escrow");
-    else warn("program is upgradeable", `by ${authority}`);
+    else {
+      const custody = await custodyOf(authority);
+      if (custody === "a Squads multisig") warn("program is upgradeable by a Squads multisig", `${authority} — burn with --final after the audit`);
+      else (MAINNET ? fail : warn)(`program is upgradeable by ${custody}`, `${authority} — run: node scripts/upgrade-authority.mjs transfer <SQUADS_VAULT>`);
+    }
   }
 }
 
@@ -109,6 +128,13 @@ if (!cfgInfo) {
       if (key === deployKey.publicKey.toBase58())
         fail(`${role} is the local deploy key`, "its private key is a plaintext file on this machine");
     }
+  }
+  // The config authority can point the treasury anywhere and the arbitrator can rule
+  // every dispute; neither should be one person's hot key on mainnet.
+  for (const role of ["authority", "arbitrator"]) {
+    const custody = await custodyOf(roles[role]);
+    if (custody === "a Squads multisig") pass(`${role} is a Squads multisig`, roles[role]);
+    else (MAINNET ? fail : warn)(`${role} is ${custody}`, `${roles[role]} — see KEYS.md`);
   }
 }
 

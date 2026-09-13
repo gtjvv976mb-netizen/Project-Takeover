@@ -21,6 +21,8 @@ worth building next. Sources are linked so every claim can be checked.
 | On-chain program tests (`npm run program:test`) | **46 of 46 pass**, run against the binary actually deployed on devnet (downloaded from the program-data account) rather than a local build |
 | `scripts/preflight.mjs` against devnet | Program deployed, fee 5% within cap, config authority / arbitrator / treasury are three distinct keys; program still upgradeable by `F4So…Ffof` |
 | `/api/health` | Reports honestly; the public devnet RPC returns 429 under load, which is why `rpcReachable` flips to false from a sandbox |
+| pump.fun parsers against **mainnet** | Bonding-curve creator matches pump.fun's own API for live coins; the canonical PumpSwap pool derives and its coin creator matches; 641,372 fee-sharing configs exist on mainnet, the PDA derivation matches each, every sampled curve's creator field points at its config, and admin / revoked / shareholders parse (shares sum to 10,000 bps) |
+| `npm run test:unit` | 14 of 14 pass: layouts pinned against pump.fun's published interface, plus the control verdict including the 90%-kept trick and revoked configs |
 
 The program tests could not be run against a fresh local build because the Anza and
 Anchor toolchains are not installed in this environment. Running them against the
@@ -36,6 +38,22 @@ what is on a laptop.
 - **Footer coin column.** The "Coin" heading rendered above nothing until a coin is
   configured. The whole column now hides, as the README promises.
 - **One source for the site URL.** `src/lib/site.ts` feeds the layout, robots and sitemap.
+- **pump.fun creator role resolved, not compared.** The creator field is read from the
+  bonding curve, or from the canonical PumpSwap pool once graduated, and if it points at
+  a fee-sharing config the config is parsed. A wallet holds the role only as admin *and*
+  sole shareholder at 100%; a revoked config is unsellable. Listing creation enforces
+  it, `GET /api/listings/:id/handover` reports it live, and the listing page shows the
+  buyer the share table before they release. Layouts come from pump.fun's published
+  interface files; `npm run test:unit` pins them.
+- **Token-2022 mints refused for authority sales, with reasons.** The escrow program
+  only holds legacy SPL Token authorities, so a Token-2022 mint could never settle. The
+  mint's extensions (permanent delegate, transfer hook, close authority, transfer fee,
+  default-frozen, inline metadata) are read anyway and shown on the token page as risk
+  chips, and metadata held inside a Token-2022 mint is never offered as an authority.
+- **Upgrade-authority custody enforced.** `/api/config` reports whether the upgrade
+  authority is a single wallet, a Squads multisig or gone; /how-it-works says so in
+  words; the preflight fails a mainnet deploy whose upgrade authority, config authority
+  or arbitrator is a plain wallet; `scripts/upgrade-authority.mjs` moves or burns it.
 
 ---
 
@@ -44,7 +62,14 @@ what is on a laptop.
 These change what a buyer is actually buying, or who controls the program. Do them before
 the first mainnet listing, in this order.
 
-1. **Fee-sharing-aware pump.fun verification.** Since pump.fun's January 2026 creator-fee
+**Update, same day.** Items 1 and 2 are now fixed in code (see "Fixed in this change"
+below and `tests/pump.test.ts`). Item 3 is fixed as far as code can fix it: the preflight
+refuses a mainnet deploy whose authorities are plain wallets, the site reports what kind of
+account holds the upgrade authority, and `scripts/upgrade-authority.mjs` performs the
+transfer or the burn. The transfer itself still has to be signed by whoever holds the
+deploy key, which is not this repository.
+
+1. **Fee-sharing-aware pump.fun verification.** *(fixed)* Since pump.fun's January 2026 creator-fee
    update, the bonding curve's `creator` field can hold a *fee-sharing config* rather than a
    wallet, with an admin who can split fees across up to ten wallets, transfer authority,
    or revoke it permanently. For graduated coins the relevant field is the PumpSwap pool's
@@ -55,7 +80,7 @@ the first mainnet listing, in this order.
    the listing and refuse revoked configs.
    Sources: [pump.fun SDK fee-sharing doc](https://github.com/nirholas/pump-fun-sdk/blob/main/docs/fee-sharing.md),
    [pump.fun fee schedule](https://pump.fun/docs/fees).
-2. **Token-2022 extension allowlist.** `fetchTokenInfo` and the client transaction builder
+2. **Token-2022 extension allowlist.** *(fixed: refused at listing, risks shown)* `fetchTokenInfo` and the client transaction builder
    only pick the token program id; nothing reads the mint's extensions. A mint with a
    permanent delegate can move any holder's tokens, a transfer hook runs arbitrary code on
    every transfer, and a mint-close authority lets the mint be closed and reinitialised at
@@ -64,8 +89,8 @@ the first mainnet listing, in this order.
    authority" is a different authority than the Metaplex one the site reads.
    Sources: [Neodyme on Token-2022](https://neodyme.io/en/blog/token-2022/),
    [Phantom docs](https://docs.phantom.com/developer-powertools/solana-token-extensions-token22).
-3. **Squads timelocked multisig for the upgrade and config authorities.** Closes AUDIT.md
-   H-2. Publish the multisig address on the site so a buyer can verify it.
+3. **Squads timelocked multisig for the upgrade and config authorities.** *(enforced; the
+   signature is yours to give)* Closes AUDIT.md H-2. Publish the multisig address on the site so a buyer can verify it.
    Sources: [Squads security practices](https://docs.squads.so/main/additional-resources/advanced-security-best-practices),
    [solana-upgrade-watch](https://github.com/simonvellin/solana-upgrade-watch).
 4. **Independent audit.** Single-purpose programs of this size run roughly $7–20k over about

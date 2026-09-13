@@ -2,7 +2,7 @@
 import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
-import { api, signedPost } from "@/lib/client/api";
+import { api, signedPost, type Handover } from "@/lib/client/api";
 import { buyTokenOnChain, cancelOnChain, disputeOnChain, fundOnChain, refundOnChain, releaseOnChain } from "@/lib/client/program";
 import { explorerUrl, useConfig } from "@/components/ConfigContext";
 import { Alert, Button, Chip, inputCls, StatusBadge, TypeBadge } from "@/components/ui";
@@ -22,6 +22,8 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [note, setNote] = useState("");
+  /** For pump.fun listings: who holds the creator role right now, read live and resolved through any fee split. */
+  const [handover, setHandover] = useState<Handover | null>(null);
   /** Deadline comes from the chain, not the index, so a stale row cannot hide a refund. */
   const [deadline, setDeadline] = useState<number | null>(null);
   /** Ticks once a minute so the refund button appears the moment the window closes. */
@@ -36,6 +38,7 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
     const r = await api.listing(id);
     setL(r.listing);
     setEvents(r.events);
+    if (r.listing.type === "pump_creator") api.handover(id).then(setHandover).catch(() => setHandover(null));
     // refresh the authoritative state from the program itself
     try {
       const chain = await fetch(`/api/listings/${id}/sync`, { method: "POST" }).then((x) => x.json());
@@ -132,6 +135,30 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
               <li>Current on-chain creator: <span className="font-mono">{shortKey(l.token?.pump?.creator, 6)}</span> {l.token?.pump?.complete ? "· graduated" : "· on bonding curve"}</li>
             </ul>
           )}
+          {l.type === "pump_creator" && handover && (
+            <div className="mt-4 space-y-2">
+              <Alert kind={handover.handedOver ? "success" : handover.role === "buyer" ? "warn" : handover.verdict.full ? "info" : "error"}>
+                <strong>
+                  {handover.role === "buyer"
+                    ? (handover.handedOver ? "Handed over. " : "Not handed over yet. ")
+                    : (handover.verdict.full ? "Seller holds the role outright. " : "Seller no longer holds the role outright. ")}
+                </strong>
+                {handover.verdict.reason}
+                {handover.control?.source === "pool" && " Read from the PumpSwap pool, which pays the fees since graduation."}
+              </Alert>
+              {handover.control?.kind === "sharing_config" && handover.control.config && (
+                <div className="rounded-xl border border-line bg-bg-2 p-3 text-xs">
+                  <div className="kicker mb-1">Creator fee split, live from pump.fun</div>
+                  <div className="text-muted">Admin <span className="font-mono text-ink">{shortKey(handover.control.config.admin, 6)}</span>{handover.control.config.adminRevoked && <span className="text-rose"> · permanently locked</span>}</div>
+                  <ul className="mt-1 space-y-0.5 font-mono">
+                    {handover.control.config.shareholders.map((sh) => (
+                      <li key={sh.address} className="flex justify-between gap-3"><span>{shortKey(sh.address, 6)}{sh.address === l.buyer ? " (buyer)" : sh.address === l.seller ? " (seller)" : ""}</span><span>{(sh.shareBps / 100).toFixed(2)}%</span></li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
           {l.type === "offchain" && (
             <div className="space-y-2 text-muted">
               <div>Category: {OFFCHAIN_CATEGORY_LABELS[(l.asset as OffchainAsset).category] ?? (l.asset as OffchainAsset).category}</div>
@@ -201,7 +228,12 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
         {isBuyer && l.status === "paid" && (
           <div className="space-y-2">
             <Alert kind="info">Your {formatSol(l.priceLamports)} SOL is held by the escrow program.</Alert>
-            <Button className="w-full" onClick={release} disabled={!!busy}>{busy ?? "I received it · release funds"}</Button>
+            {l.type === "pump_creator" && handover && !handover.handedOver && (
+              <Alert kind="warn"><strong>The chain does not show the creator role as yours yet.</strong> Releasing now pays the seller anyway. Ask them to finish the transfer on pump.fun, then reload this page.</Alert>
+            )}
+            <Button className="w-full" variant={l.type === "pump_creator" && handover && !handover.handedOver ? "secondary" : undefined} onClick={release} disabled={!!busy}>
+              {busy ?? (l.type === "pump_creator" && handover && !handover.handedOver ? "Release anyway (not verified on chain)" : "I received it · release funds")}
+            </Button>
             {pastDeadline && (
               <Button className="w-full" variant="secondary" onClick={claimRefund} disabled={!!busy}>
                 {busy ?? "Delivery window passed · take my money back"}
@@ -225,6 +257,7 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
             {l.type === "pump_creator" && (
               <p className="break-all text-xs text-muted">
                 Transfer coin ownership to <span className="font-mono">{l.buyer}</span> on pump.fun, then ask them to release.
+                If the coin uses fee sharing, the buyer must end up as admin <em>and</em> sole shareholder at 100%; anything less shows here as not handed over.
               </p>
             )}
             <textarea className={inputCls} rows={3} placeholder="Delivery note for the buyer (what you handed over, and where)" value={note} onChange={(e) => setNote(e.target.value)} />

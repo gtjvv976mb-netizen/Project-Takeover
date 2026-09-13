@@ -5,12 +5,19 @@
 // the user's own wallet and executed by the on-chain program.
 import "server-only";
 import {
-  Connection, PublicKey,
+  Connection, PublicKey, SystemProgram,
 } from "@solana/web3.js";
-import { unpackMint, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID } from "@solana/spl-token";
-import type { AppConfig, AuthorityKind, TokenInfo } from "./types";
+import {
+  unpackMint, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, ExtensionType, AccountState,
+  getExtensionTypes, getPermanentDelegate, getTransferHook, getMintCloseAuthority, getMetadataPointerState,
+  getTransferFeeConfig, getDefaultAccountState, getNonTransferable, getTokenMetadata,
+} from "@solana/spl-token";
+import type { AppConfig, AuthorityKind, PumpControl, TokenExtensions, TokenInfo } from "./types";
 import { PROGRAM_ID, configPda } from "./program";
-import { bondingCurvePda, metadataPda, parseBondingCurve, parseMetadata, priceFromCurve } from "./solana-shared";
+import {
+  bondingCurvePda, canonicalPoolPda, metadataPda, parseBondingCurve, parseMetadata, parsePool, parseSharingConfig,
+  priceFromCurve, pumpControlOf, sharingConfigPda, SQUADS_V4_PROGRAM_ID, WSOL_MINT,
+} from "./solana-shared";
 
 /**
  * Read an environment variable, treating blank as absent.
@@ -79,6 +86,7 @@ export function appConfig(): AppConfig {
     feeBps: FEE_BPS,
     appName: APP_NAME,
     upgradeAuthority: null,
+    upgradeCustody: null,
   };
 }
 
@@ -95,12 +103,29 @@ const BPF_UPGRADEABLE_LOADER = new PublicKey("BPFLoaderUpgradeab1e11111111111111
  * ProgramData layout: 4-byte enum tag (3), 8-byte deploy slot, then Option<Pubkey> as a
  * 1-byte discriminant followed by 32 bytes.
  */
-async function upgradeAuthority(): Promise<string | null> {
+async function upgradeAuthority(): Promise<{ authority: string | null; custody: AppConfig["upgradeCustody"] }> {
   const [programData] = PublicKey.findProgramAddressSync([PROGRAM_ID.toBuffer()], BPF_UPGRADEABLE_LOADER);
   const info = await connection().getAccountInfo(programData, "confirmed");
-  if (!info || info.data.length < 45) return null;
+  if (!info || info.data.length < 45) return { authority: null, custody: null };
   const hasAuthority = info.data[12] === 1;
-  return hasAuthority ? new PublicKey(info.data.subarray(13, 45)).toBase58() : null;
+  if (!hasAuthority) return { authority: null, custody: null };
+  const authority = new PublicKey(info.data.subarray(13, 45));
+  return { authority: authority.toBase58(), custody: await custodyOf(authority) };
+}
+
+/**
+ * What kind of thing holds a key power.
+ *
+ * A plain wallet is one signature away from anything. A Squads multisig needs several,
+ * and with a time lock the change is visible before it lands. The site states which it
+ * is rather than letting "held by <address>" stand in for either.
+ */
+export async function custodyOf(authority: PublicKey): Promise<AppConfig["upgradeCustody"]> {
+  const info = await connection().getAccountInfo(authority, "confirmed").catch(() => null);
+  // A wallet that has never received lamports has no account at all; it is still a wallet.
+  if (!info || info.owner.equals(SystemProgram.programId)) return "wallet";
+  if (info.owner.equals(SQUADS_V4_PROGRAM_ID)) return "squads";
+  return "program";
 }
 
 /**
@@ -130,7 +155,7 @@ export async function chainConfig(): Promise<AppConfig> {
       // discriminator(8) authority(32) arbitrator(32) treasury(32) fee_bps(2)
       const treasury = new PublicKey(info.data.subarray(72, 104)).toBase58();
       const feeBps = info.data.readUInt16LE(104);
-      const cfg = { ...base, treasury, feeBps, upgradeAuthority: upgrader };
+      const cfg = { ...base, treasury, feeBps, upgradeAuthority: upgrader?.authority ?? null, upgradeCustody: upgrader?.custody ?? null };
       cached = { at: Date.now(), cfg };
       return cfg;
     }
@@ -166,6 +191,81 @@ function tokenProgramOf(owner: PublicKey): PublicKey {
   throw new Error("Account is not an SPL token mint");
 }
 
+/**
+ * Read what a Token-2022 mint can do beyond minting and freezing.
+ *
+ * The mint and freeze authorities used to be the whole story, and for a legacy SPL mint
+ * they still are. A Token-2022 mint can also carry a permanent delegate that moves any
+ * holder's tokens, a transfer hook that runs its own program on every transfer, or a
+ * close authority that can retire the mint and reinitialise the address. A buyer of "the
+ * authorities" who does not also get those has bought less than it looks like.
+ */
+function inspectExtensions(m: ReturnType<typeof unpackMint>, program: PublicKey): TokenExtensions {
+  if (!program.equals(TOKEN_2022_PROGRAM_ID)) {
+    return {
+      program: "spl-token", types: [], permanentDelegate: null, transferHookProgram: null, mintCloseAuthority: null,
+      metadataPointer: null, transferFeeBps: null, defaultFrozen: false, nonTransferable: false, risks: [],
+    };
+  }
+  const types = m.tlvData.length ? getExtensionTypes(m.tlvData) : [];
+  const nameOf = (t: ExtensionType) => ExtensionType[t] ?? String(t);
+  const pd = getPermanentDelegate(m)?.delegate ?? null;
+  const hook = getTransferHook(m)?.programId ?? null;
+  const close = getMintCloseAuthority(m)?.closeAuthority ?? null;
+  const pointer = getMetadataPointerState(m)?.metadataAddress ?? null;
+  const fee = getTransferFeeConfig(m)?.newerTransferFee.transferFeeBasisPoints ?? null;
+  const frozen = getDefaultAccountState(m)?.state === AccountState.Frozen;
+  const nonTransferable = getNonTransferable(m) !== null;
+  const isDefault = (k: PublicKey | null) => !k || k.equals(PublicKey.default);
+
+  const risks: TokenExtensions["risks"] = [];
+  if (!isDefault(pd)) risks.push({ level: "critical", code: "permanent_delegate", text: `A permanent delegate (${pd!.toBase58()}) can move or burn any holder's tokens at any time, whoever holds the mint authority.` });
+  if (!isDefault(hook)) risks.push({ level: "critical", code: "transfer_hook", text: `Every transfer runs program ${hook!.toBase58()}, which can block or tax transfers and is controlled outside the authorities being sold.` });
+  if (!isDefault(close)) risks.push({ level: "critical", code: "mint_close_authority", text: `${close!.toBase58()} can close this mint and reinitialise the same address as a different token.` });
+  if (nonTransferable) risks.push({ level: "critical", code: "non_transferable", text: "Tokens of this mint cannot be transferred at all." });
+  if (frozen) risks.push({ level: "warn", code: "default_frozen", text: "New token accounts start frozen; the freeze authority must thaw each one before it can trade." });
+  if (fee) risks.push({ level: "warn", code: "transfer_fee", text: `Every transfer pays a ${(fee / 100).toFixed(2)}% fee to the mint's fee authority.` });
+  if (pointer && pointer.equals(m.address)) risks.push({ level: "warn", code: "inline_metadata", text: "Name, symbol and image live inside the mint itself, not in a Metaplex account, so the metadata authority is a Token-2022 authority." });
+
+  return {
+    program: "token-2022",
+    types: types.map(nameOf),
+    permanentDelegate: isDefault(pd) ? null : pd!.toBase58(),
+    transferHookProgram: isDefault(hook) ? null : hook!.toBase58(),
+    mintCloseAuthority: isDefault(close) ? null : close!.toBase58(),
+    metadataPointer: pointer && !pointer.equals(PublicKey.default) ? pointer.toBase58() : null,
+    transferFeeBps: fee ?? null,
+    defaultFrozen: frozen,
+    nonTransferable,
+    risks,
+  };
+}
+
+/**
+ * Resolve the pump.fun creator field to who actually controls the role.
+ *
+ * Reads the curve's creator, or the canonical PumpSwap pool's coin creator once the coin
+ * has graduated, since that is the account paying fees from then on. If the address it
+ * finds is a fee-sharing config, the config is read and returned with it.
+ */
+export async function resolvePumpControl(mint: PublicKey, curve: NonNullable<ReturnType<typeof parseBondingCurve>>): Promise<PumpControl | null> {
+  const conn = connection();
+  let raw = curve.creator;
+  let source: PumpControl["source"] = "bonding_curve";
+  if (curve.complete) {
+    const pool = await conn.getAccountInfo(canonicalPoolPda(mint, curve.quoteMint ?? WSOL_MINT), "confirmed").catch(() => null);
+    const parsed = pool ? parsePool(pool.data) : null;
+    if (parsed) { raw = parsed.coinCreator; source = "pool"; }
+  }
+  if (!raw) return null;
+  const configPdaAddr = sharingConfigPda(mint);
+  if (!raw.equals(configPdaAddr)) return { raw: raw.toBase58(), source, kind: "wallet", config: null };
+  const info = await conn.getAccountInfo(configPdaAddr, "confirmed").catch(() => null);
+  const config = info ? parseSharingConfig(info.data) : null;
+  if (config) config.address = configPdaAddr.toBase58();
+  return { raw: raw.toBase58(), source, kind: "sharing_config", config };
+}
+
 export async function fetchTokenInfo(mintStr: string): Promise<TokenInfo> {
   const mint = new PublicKey(mintStr);
   const conn = connection();
@@ -178,6 +278,7 @@ export async function fetchTokenInfo(mintStr: string): Promise<TokenInfo> {
   const program = tokenProgramOf(mintInfo.owner);
   const m = unpackMint(mint, mintInfo, program);
 
+  const extensions = inspectExtensions(m, program);
   const info: TokenInfo = {
     mint: mintStr,
     decimals: m.decimals,
@@ -185,6 +286,8 @@ export async function fetchTokenInfo(mintStr: string): Promise<TokenInfo> {
     mintAuthority: m.mintAuthority?.toBase58() ?? null,
     freezeAuthority: m.freezeAuthority?.toBase58() ?? null,
     updateAuthority: null,
+    extensions,
+    metadataSource: null,
     pump: null,
   };
 
@@ -198,10 +301,23 @@ export async function fetchTokenInfo(mintStr: string): Promise<TokenInfo> {
   if (meta) {
     const p = parseMetadata(meta.data);
     info.updateAuthority = p.updateAuthority.toBase58();
+    info.metadataSource = "metaplex";
     info.name = p.name; info.symbol = p.symbol; info.uri = p.uri;
-    if (p.uri) {
+  } else if (extensions.metadataPointer === mintStr) {
+    // Metadata inside the mint. Its update authority is a Token-2022 authority, which the
+    // escrow program (a Metaplex CPI) cannot hold, so it is reported but never sold.
+    const tm = await withTimeout(getTokenMetadata(conn, mint, "confirmed", TOKEN_2022_PROGRAM_ID), 2500);
+    if (tm) {
+      info.updateAuthority = tm.updateAuthority?.toBase58() ?? null;
+      info.metadataSource = "token-2022";
+      info.name = tm.name; info.symbol = tm.symbol; info.uri = tm.uri;
+    }
+  }
+  {
+    const uri = info.uri;
+    if (uri) {
       try {
-        const res = await fetch(p.uri, { signal: AbortSignal.timeout(2500) });
+        const res = await fetch(uri, { signal: AbortSignal.timeout(2500) });
         const j = (await res.json()) as {
           image?: string; name?: string; symbol?: string; description?: string;
           twitter?: string; telegram?: string; website?: string;
@@ -223,9 +339,11 @@ export async function fetchTokenInfo(mintStr: string): Promise<TokenInfo> {
     const priceSol = c && !c.complete ? priceFromCurve(c, m.decimals) : null;
     const supply = Number(m.supply) / 10 ** m.decimals;
     const solRaised = c ? Number(c.realSolReserves) / 1e9 : null;
+    const control = c ? await resolvePumpControl(mint, c).catch(() => null) : null;
     info.pump = {
       bondingCurve: bondingCurvePda(mint).toBase58(),
       creator: c?.creator?.toBase58() ?? null,
+      control,
       complete: c?.complete ?? null,
       priceSol,
       marketCapSol: priceSol !== null ? priceSol * supply : null,
@@ -272,11 +390,17 @@ export async function authoritiesHeldBy(mintStr: string, wanted: AuthorityKind[]
 // ---------- payment verification ----------
 
 
-/** For pump.fun listings: is the bonding curve's creator now `wallet`? */
-export async function pumpCreatorIs(mintStr: string, wallet: string): Promise<{ ok: boolean; creator: string | null }> {
-  const info = await connection().getAccountInfo(bondingCurvePda(new PublicKey(mintStr)));
-  if (!info) return { ok: false, creator: null };
-  const c = parseBondingCurve(info.data);
-  const creator = c?.creator?.toBase58() ?? null;
-  return { ok: creator === wallet, creator };
+/**
+ * For pump.fun listings: does `wallet` now hold the creator role outright?
+ *
+ * Reads the live chain, never the listing's snapshot, and looks through a fee-sharing
+ * config rather than at it. This is what a buyer should see before releasing escrow.
+ */
+export async function pumpHandover(mintStr: string, wallet: string) {
+  const mint = new PublicKey(mintStr);
+  const info = await connection().getAccountInfo(bondingCurvePda(mint), "confirmed");
+  const curve = info ? parseBondingCurve(info.data) : null;
+  const control = curve ? await resolvePumpControl(mint, curve) : null;
+  const verdict = pumpControlOf(control, wallet);
+  return { control, verdict, complete: curve?.complete ?? null };
 }

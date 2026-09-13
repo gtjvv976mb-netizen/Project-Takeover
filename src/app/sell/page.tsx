@@ -7,6 +7,7 @@ import { createListingOnChain, escrowAuthorityOnChain } from "@/lib/client/progr
 import { useConfig } from "@/components/ConfigContext";
 import { Alert, Button, Field, inputCls, TokenAvatar } from "@/components/ui";
 import { OFFCHAIN_CATEGORY_LABELS, shortKey, TYPE_LABELS, type AuthorityKind, type Listing, type ListingType, type OffchainAsset, type TokenInfo } from "@/lib/types";
+import { pumpControlOf } from "@/lib/solana-shared";
 
 const AUTH_LABELS: Record<AuthorityKind, string> = { mint: "Mint authority (can mint new supply)", freeze: "Freeze authority (can freeze token accounts)", metadata_update: "Metadata update authority (name, symbol, image)" };
 
@@ -37,8 +38,10 @@ export default function Sell() {
       const t = await api.token(mint.trim());
       setToken(t);
       if (!title) setTitle(t.name ? `${t.name} (${t.symbol})` : mint.trim());
-      const held = (["mint", "freeze", "metadata_update"] as AuthorityKind[]).filter((k) => (k === "mint" ? t.mintAuthority : k === "freeze" ? t.freezeAuthority : t.updateAuthority) === me);
-      setAuthorities(held);
+      const held = (["mint", "freeze", "metadata_update"] as AuthorityKind[]).filter((k) => (k === "mint" ? t.mintAuthority : k === "freeze" ? t.freezeAuthority : t.updateAuthority) === me)
+        // Metadata held inside a Token-2022 mint is a different authority than the Metaplex one the program can escrow.
+        .filter((k) => k !== "metadata_update" || t.metadataSource === "metaplex");
+      setAuthorities(t.extensions?.program === "token-2022" ? [] : held);
       if (t.pump && type === "token_authority" && held.length === 0) setType("pump_creator");
     } catch (e) { setError((e as Error).message); } finally { setBusy(null); }
   }
@@ -96,7 +99,7 @@ export default function Sell() {
     );
   }
 
-  const canSubmit = title && Number(priceSol) >= 0.01 && (type === "offchain" ? deliverables : token && (type === "pump_creator" || authorities.length > 0));
+  const canSubmit = title && Number(priceSol) >= 0.01 && (type === "offchain" ? deliverables : token && (type === "pump_creator" ? pumpControlOf(token.pump?.control, me ?? "").full : authorities.length > 0 && token.extensions?.program !== "token-2022"));
 
   return (
     <div className="wrap py-10 max-w-3xl space-y-6">
@@ -128,11 +131,20 @@ export default function Sell() {
                   <div className="text-xs text-faint">{token.pump ? `pump.fun coin · creator ${shortKey(token.pump.creator)}${token.pump.complete ? " · graduated" : " · bonding"}` : "SPL token"}</div>
                 </div>
               </div>
-              {type === "token_authority" && (
+              {type === "token_authority" && token.extensions?.program === "token-2022" && (
+                <div className="mt-4 space-y-2">
+                  <Alert kind="error">
+                    This is a Token-2022 mint. The escrow program can only hold legacy SPL Token authorities today, so it cannot be listed as a token sale yet.
+                    {token.extensions.risks.length > 0 && " Its extensions also change what the authorities are worth:"}
+                  </Alert>
+                  {token.extensions.risks.map((r) => <Alert key={r.code} kind={r.level === "critical" ? "error" : "warn"}>{r.text}</Alert>)}
+                </div>
+              )}
+              {type === "token_authority" && token.extensions?.program !== "token-2022" && (
                 <div className="mt-4 space-y-2">
                   {(Object.keys(AUTH_LABELS) as AuthorityKind[]).map((k) => {
                     const cur = k === "mint" ? token.mintAuthority : k === "freeze" ? token.freezeAuthority : token.updateAuthority;
-                    const mine = cur === me;
+                    const mine = cur === me && (k !== "metadata_update" || token.metadataSource === "metaplex");
                     return (
                       <label key={k} className={`flex items-center gap-3  border px-3 py-2 text-sm ${mine ? "border-line" : "border-line opacity-50"}`}>
                         <input type="checkbox" disabled={!mine} checked={authorities.includes(k)} onChange={(e) => setAuthorities(e.target.checked ? [...authorities, k] : authorities.filter((x) => x !== k))} />
@@ -146,13 +158,17 @@ export default function Sell() {
                   )}
                 </div>
               )}
-              {type === "pump_creator" && (
-                token.pump ? (
-                  token.pump.creator === me
-                    ? <Alert kind="success">You are the on-chain creator of this coin. Buyers will receive the creator role and its fee rights.</Alert>
-                    : <Alert kind="error">The bonding curve lists {shortKey(token.pump.creator)} as creator, not your wallet.</Alert>
-                ) : <Alert kind="error">This mint has no pump.fun bonding curve.</Alert>
-              )}
+              {type === "pump_creator" && (() => {
+                if (!token.pump) return <Alert kind="error">This mint has no pump.fun bonding curve.</Alert>;
+                const v = pumpControlOf(token.pump.control, me ?? "");
+                if (v.full) return <Alert kind="success">You hold this coin&apos;s creator role outright. Buyers will receive the creator role and every basis point of its fee.</Alert>;
+                return (
+                  <Alert kind="error">
+                    You do not hold the creator role outright. {v.reason}
+                    {v.isAdmin && !v.revoked && " Reset the fee split to 100% to your wallet on pump.fun, then look the coin up again."}
+                  </Alert>
+                );
+              })()}
             </div>
           )}
         </>

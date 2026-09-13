@@ -134,10 +134,13 @@ export default function HowItWorks() {
                       <a className="mono break-all text-blue hover:underline" href={explorerUrl(cfg, "address", cfg.upgradeAuthority)} target="_blank" rel="noreferrer">
                         {cfg.upgradeAuthority}
                       </a>
-                      . Whoever holds that key could deploy a version that does hold your funds. It is
-                      scheduled to be handed to a multisig or destroyed outright once the program has
-                      been audited — and this line is read from the chain, so it will say so when that
-                      happens rather than waiting for someone to update the copy.
+                      {cfg.upgradeCustody === "squads"
+                        ? ", a Squads multisig: several people have to sign an upgrade, and it can be seen coming before it lands. It is scheduled to be destroyed outright once the program has been audited."
+                        : cfg.upgradeCustody === "wallet"
+                          ? ", a single wallet. One key could deploy a version that does hold your funds. It is scheduled to be handed to a multisig, then destroyed outright once the program has been audited."
+                          : ". Whoever controls that account could deploy a version that does hold your funds."}
+                      {" "}This line is read from the chain, so it will change when that happens
+                      rather than waiting for someone to update the copy.
                     </>
                   ) : (
                     <>
