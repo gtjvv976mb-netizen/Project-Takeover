@@ -3,6 +3,7 @@ import { PublicKey } from "@solana/web3.js";
 import { insertListing, listListings } from "@/lib/db";
 import { handleError, HttpError, json, readSigned } from "@/lib/api-utils";
 import { fetchTokenInfo } from "@/lib/solana";
+import { pumpControlOf } from "@/lib/solana-shared";
 import type { AuthorityKind, Listing, ListingAsset, ListingStatus, ListingType, OffchainAsset, PumpCreatorAsset, TokenAuthorityAsset } from "@/lib/types";
 export const dynamic = "force-dynamic";
 
@@ -36,6 +37,19 @@ export async function POST(req: Request) {
       const authorities = [...new Set((a.authorities ?? []).filter((x) => VALID_AUTH.includes(x)))];
       if (!authorities.length) throw new HttpError(400, "Pick at least one authority to sell");
       token = await fetchTokenInfo(mint);
+      // The escrow program holds authorities through the legacy SPL Token program and
+      // Metaplex. A Token-2022 mint cannot be escrowed by it at all, and even if it could,
+      // a permanent delegate or transfer hook would leave the buyer with less than "the
+      // authorities" implies. Say so at listing time rather than at settlement.
+      if (token.extensions?.program === "token-2022") {
+        const critical = token.extensions.risks.filter((r) => r.level === "critical");
+        throw new HttpError(400, critical.length
+          ? `This is a Token-2022 mint and its extensions undercut the sale: ${critical.map((r) => r.text).join(" ")}`
+          : "This is a Token-2022 mint. The escrow program can only hold legacy SPL Token authorities today, so it cannot be listed yet.");
+      }
+      if (authorities.includes("metadata_update") && token.metadataSource !== "metaplex") {
+        throw new HttpError(400, "This token's metadata is not held in a Metaplex account, so its update authority cannot be escrowed here.");
+      }
       for (const k of authorities) {
         const cur = k === "mint" ? token.mintAuthority : k === "freeze" ? token.freezeAuthority : token.updateAuthority;
         if (cur !== signer) throw new HttpError(400, `Your wallet does not hold the ${k} authority (current: ${cur ?? "none / revoked"})`);
@@ -46,8 +60,12 @@ export async function POST(req: Request) {
       mint = new PublicKey(a.mint).toBase58();
       token = await fetchTokenInfo(mint);
       if (!token.pump) throw new HttpError(400, "No pump.fun bonding curve found for this mint");
-      if (!token.pump.creator) throw new HttpError(400, "Could not read the coin creator from the bonding curve, so ownership cannot be verified");
-      if (token.pump.creator && token.pump.creator !== signer) throw new HttpError(400, `pump.fun lists ${token.pump.creator} as the coin creator, not your wallet`);
+      if (!token.pump.control) throw new HttpError(400, "Could not read the coin creator from the chain, so ownership cannot be verified");
+      // Look through a fee-sharing config, not at it: a seller who is admin of a config
+      // that still pays them 90% has not got a coin to sell, and one whose config is
+      // revoked has nothing that can be handed over at all.
+      const verdict = pumpControlOf(token.pump.control, signer);
+      if (!verdict.full) throw new HttpError(400, `You do not hold this coin's creator role outright. ${verdict.reason}${verdict.isAdmin && !verdict.revoked ? " Reset the fee split to 100% to your wallet on pump.fun, then list it." : ""}`);
       cleanAsset = { mint, pumpUrl: `https://pump.fun/coin/${mint}` };
     } else {
       const a = asset as OffchainAsset;

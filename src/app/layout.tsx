@@ -7,6 +7,7 @@ import { ConfigProvider } from "@/components/ConfigContext";
 import { Nav } from "@/components/Nav";
 import { SiteFooter } from "@/components/SiteFooter";
 import { THEME_SCRIPT } from "@/components/ThemeToggle";
+import { SITE_URL } from "@/lib/site";
 
 const display = Plus_Jakarta_Sans({ subsets: ["latin"], weight: ["600", "700", "800"], variable: "--font-display-face", display: "swap" });
 const ui = Inter({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-ui", display: "swap" });
@@ -19,10 +20,6 @@ export const viewport = {
   ],
 };
 
-// Blank or scheme-less values make `new URL` throw, and this runs at import time, so a
-// mistyped variable would stop the site booting rather than just spoiling a link preview.
-const rawSite = process.env.NEXT_PUBLIC_SITE_URL?.trim();
-const SITE_URL = rawSite && /^https?:\/\//i.test(rawSite) ? rawSite : "https://project-takeover.com";
 const TITLE = "Project: Takeover — think you'd run it better? Buy it.";
 const DESCRIPTION =
   "Buy Solana projects outright, not by the bag. Memecoin authorities, pump.fun coin ownership, whole sites and communities — handed over on chain, with nobody holding the money but the code. Built something? Sell it.";

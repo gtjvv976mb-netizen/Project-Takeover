@@ -133,6 +133,97 @@ Two honest options, in descending order of how much they are worth:
 Doing neither, and shipping to mainnet with one laptop key able to replace the program, is
 not a middle path. It is the thing the site tells people is impossible.
 
+## Runbook: moving the three powers to a Squads multisig
+
+Everything below is signed on the machine that holds the deploy key. Nothing in this
+repository can do it for you, and that is the point.
+
+**0. Create the multisig.** At app.squads.so, create a Squads v4 multisig with at least
+three members on separate devices and a 2-of-3 threshold. **A 1-of-1 multisig is not a
+multisig.** One key still proposes, approves and executes alone, so moving a power into
+it changes the diagram and not the trust; the scripts here refuse it and the site says
+so in words. Note also that the Squads app puts the **vault** address in its URL, so the
+multisig address has to be read off the page, not the address bar.
+
+Check what you built before trusting it with anything:
+
+```bash
+node scripts/squads.mjs <MULTISIG_OR_VAULT>     # either address works
+```
+
+It fails a threshold below 2 and warns on a missing time lock. **Four members at a
+threshold of 1 is worse than one wallet, not better**: any one of the four can approve
+and execute alone, so it is four single points of failure instead of one. The count of
+members is not the security; the threshold is. Add a time lock (a day is
+plenty) so any upgrade is visible before it lands. Note two addresses: the **multisig**
+(the account with the members) and its **vault 0** (the address it acts through, shown
+as the "vault" on the home tab). The vault is what receives the powers; the multisig is
+what the site and the preflight are told about. Fund the vault with a little SOL; the
+arbitrator pays its own transaction fees.
+
+**1. Upgrade authority → vault.** One transaction, signed by the deploy key.
+
+```bash
+node scripts/upgrade-authority.mjs status
+node scripts/upgrade-authority.mjs transfer <VAULT> --multisig <MULTISIG>        # dry run
+node scripts/upgrade-authority.mjs transfer <VAULT> --multisig <MULTISIG> --yes
+```
+
+`--multisig` is not decoration, and the transfer also refuses a multisig whose threshold
+is 1: it would be a single key with extra steps. A Squads vault can only be signed for on the network
+where its multisig account lives, so a vault created in the app on mainnet is inert on
+devnet: handing a devnet program to it would leave nobody able to upgrade it, ever. The
+script therefore refuses any destination off the ed25519 curve unless the named multisig
+exists **on the network being written to** and the destination really is one of its
+vaults. The dry run needs no key at all, so the destination can be checked from any
+machine before the real thing is attempted.
+
+**2. Config authority → vault.** Two steps, because a one-step transfer to a mistyped
+address would freeze the fee, treasury and arbitrator forever. Nominate with the deploy
+key, then accept *from the vault* by executing the printed instruction in the Squads app.
+
+```bash
+node scripts/authority.mjs nominate <VAULT>
+node scripts/authority.mjs accept --print <VAULT>   # prints program id, accounts, base58 data
+```
+
+In the Squads app: Developers → Transaction builder → custom instruction, paste the
+three fields, propose, have the members approve, execute. `node scripts/authority.mjs
+status` then shows the vault as authority. Until it executes, the deploy key keeps every
+power and can `cancel`.
+
+**3. Arbitrator → vault, treasury → cold key.** Signed by the config authority, which
+after step 2 is the vault, so this is another custom instruction from the Squads app:
+`update_config(fee_bps, arbitrator, treasury)`. Do it *before* step 2 instead if you
+would rather sign it with the deploy key:
+
+```bash
+node scripts/init-program.mjs --fee-bps 500 --arbitrator <VAULT> --treasury <HARDWARE_WALLET>
+```
+
+**4. Tell the site and the preflight.** A vault is an empty address; on its own it cannot
+be told from a wallet. Set `NEXT_PUBLIC_SQUADS_MULTISIG=<MULTISIG>` in the Render
+dashboard (the blueprint leaves it unsynced) and pass the same to the preflight:
+
+```bash
+node scripts/preflight.mjs --mainnet --multisig <MULTISIG> --site https://project-takeover.com
+```
+
+`--mainnet` **fails** while the upgrade authority, the config authority or the arbitrator
+is a plain wallet, and passes only for a vault of the declared multisig or an immutable
+program. `/api/config` reports `upgradeCustody` ("wallet", "squads", "program" or null
+for immutable) and `squadsMultisig`, and /how-it-works links the multisig so a buyer can
+check the members and the time lock themselves.
+
+**5. After the audit: burn.**
+
+```bash
+node scripts/upgrade-authority.mjs burn --yes   # from the vault, so via the Squads app: loader SetAuthority with no new authority
+```
+
+Once the vault holds the upgrade authority, the burn is also a Squads transaction; the
+script's `burn` is for the case where the deploy key still holds it.
+
 **What is deliberately not done here.** Moving the upgrade authority to a second key on the
 same laptop would look like progress and would not be any. An attacker with the disk gets
 both. The only changes that mean anything are a multisig or `--final`, and both need

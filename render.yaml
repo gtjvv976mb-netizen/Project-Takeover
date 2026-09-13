@@ -68,3 +68,8 @@ services:
       # ever run. Public either way — the server never signs for it.
       - key: TREASURY_PUBKEY
         value: DwjNBeS7KtXCqBhZBwMK6vEReW2fpgc3pU2WKzqfGgoV
+      # The Squads multisig the keys live in. Set it in the dashboard once it exists; the
+      # site then says "a vault of this Squads multisig" instead of guessing, and the
+      # mainnet preflight can pass. Public, like everything a multisig does.
+      - key: NEXT_PUBLIC_SQUADS_MULTISIG
+        sync: false

@@ -4,6 +4,11 @@
  *   node scripts/preflight.mjs                      # check devnet
  *   node scripts/preflight.mjs --mainnet            # check mainnet readiness
  *   node scripts/preflight.mjs --mainnet --site https://project-takeover.com
+ *   node scripts/preflight.mjs --mainnet --multisig <SQUADS_MULTISIG>   # or SQUADS_MULTISIG in the env
+ *
+ * A Squads vault cannot be told from a wallet by its account alone, so pass the multisig
+ * and the vaults are derived from it. Without it, a vault reads as a program-derived
+ * address: a warning, never a pass.
  *
  * A mainnet deploy costs about 5.3 SOL in rent that only comes back if the program is
  * closed, and a mistake found afterwards is a mistake you have paid for. Everything here
@@ -28,6 +33,66 @@ const idl = JSON.parse(fs.readFileSync("src/idl/takeover_escrow.json", "utf8"));
 const PID = new PublicKey(idl.address);
 const configPda = PublicKey.findProgramAddressSync([Buffer.from("config")], PID)[0];
 const BPF_LOADER = new PublicKey("BPFLoaderUpgradeab1e11111111111111111111111");
+const SQUADS_V4 = new PublicKey("SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf");
+const SYSTEM = new PublicKey("11111111111111111111111111111111");
+
+/**
+ * What kind of account holds a power. A plain wallet is one signature from anything; a
+ * Squads multisig needs several and, with a time lock, is visible before it acts. On
+ * mainnet the first is a failure, not a warning: it is the thing the site tells people
+ * is impossible.
+ */
+const msArg = process.argv.indexOf("--multisig");
+const MULTISIG = (() => {
+  const v = msArg >= 0 ? process.argv[msArg + 1] : process.env.SQUADS_MULTISIG ?? process.env.NEXT_PUBLIC_SQUADS_MULTISIG;
+  try { return v ? new PublicKey(v) : null; } catch { return null; }
+})();
+const vaultOf = (multisig, index) => PublicKey.findProgramAddressSync(
+  [Buffer.from("multisig"), multisig.toBuffer(), Buffer.from("vault"), Buffer.from([index])], SQUADS_V4)[0];
+
+/**
+ * Read the declared multisig once: its threshold and member count decide whether being
+ * "in a multisig" means anything. A 1-of-1 is one key that proposes, approves and
+ * executes alone, so it is reported as what it is rather than as custody.
+ */
+let msShape;
+async function multisigShape() {
+  if (msShape !== undefined) return msShape;
+  msShape = null;
+  if (MULTISIG) {
+    const info = await conn.getAccountInfo(MULTISIG).catch(() => null);
+    if (info?.owner.equals(SQUADS_V4)) {
+      const b = info.data;
+      let o = 8 + 32 + 32;
+      const threshold = b.readUInt16LE(o); o += 2;
+      const timeLock = b.readUInt32LE(o); o += 4;
+      o += 16;
+      o += b[o] === 1 ? 33 : 1;
+      o += 1;
+      const members = b.readUInt32LE(o);
+      msShape = { threshold, members, timeLock };
+    }
+  }
+  return msShape;
+}
+
+async function custodyOf(pubkey) {
+  const key = new PublicKey(pubkey);
+  const info = await conn.getAccountInfo(key).catch(() => null);
+  const shape = await multisigShape();
+  const label = shape
+    ? (shape.threshold < 2
+        ? `a ${shape.threshold}-of-${shape.members} Squads multisig — one key still decides alone`
+        : `a ${shape.threshold}-of-${shape.members} Squads multisig${shape.timeLock ? `, ${Math.round(shape.timeLock / 3600)}h time lock` : ", no time lock"}`)
+    : "a Squads multisig";
+  if (info?.owner.equals(SQUADS_V4)) return { label, ok: false, note: "that is the multisig account itself, not one of its vaults" };
+  if (MULTISIG && shape) {
+    for (let i = 0; i < 8; i++) if (vaultOf(MULTISIG, i).equals(key)) return { label, ok: shape.threshold >= 2 };
+  }
+  if (!PublicKey.isOnCurve(key.toBytes())) return { label: "a program-derived address (not the declared multisig)", ok: false };
+  if (!info || info.owner.equals(SYSTEM)) return { label: "a single wallet", ok: false };
+  return { label: `an account owned by ${info.owner.toBase58()}`, ok: false };
+}
 
 let fails = 0, warns = 0;
 const pass = (m, d = "") => console.log(`  \x1b[32m✓\x1b[0m ${m}${d ? `  ${d}` : ""}`);
@@ -40,7 +105,7 @@ const deployKey = fs.existsSync(deployKeyPath)
   ? Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(deployKeyPath, "utf8"))))
   : null;
 
-console.log(`\npreflight — ${NETWORK} — ${RPC.replace(/\?api-key=.*/, "?api-key=***")}`);
+console.log(`\npreflight — ${NETWORK} — ${RPC.replace(/\?api-key=.*/, "?api-key=***")}${MULTISIG ? ` — multisig ${MULTISIG.toBase58()}` : ""}`);
 
 /* ------------------------------------------------------------------ build */
 head("Build");
@@ -82,7 +147,11 @@ if (!programInfo) {
     if (!upgradeable) pass("program is IMMUTABLE", "nobody can replace it");
     else if (MAINNET && deployKey && authority === deployKey.publicKey.toBase58())
       fail("upgrade authority is the local deploy key", "a laptop key can replace the program and drain every escrow");
-    else warn("program is upgradeable", `by ${authority}`);
+    else {
+      const c = await custodyOf(authority);
+      if (c.ok) warn(`program is upgradeable by ${c.label}`, `${authority} — burn with --final after the audit`);
+      else (MAINNET ? fail : warn)(`program is upgradeable by ${c.label}`, `${authority}${c.note ? ` — ${c.note}` : ""} — see KEYS.md`);
+    }
   }
 }
 
@@ -109,6 +178,13 @@ if (!cfgInfo) {
       if (key === deployKey.publicKey.toBase58())
         fail(`${role} is the local deploy key`, "its private key is a plaintext file on this machine");
     }
+  }
+  // The config authority can point the treasury anywhere and the arbitrator can rule
+  // every dispute; neither should be one person's hot key on mainnet.
+  for (const role of ["authority", "arbitrator"]) {
+    const c = await custodyOf(roles[role]);
+    if (c.ok) pass(`${role} is ${c.label}`, roles[role]);
+    else (MAINNET ? fail : warn)(`${role} is ${c.label}`, `${roles[role]}${c.note ? ` — ${c.note}` : ""} — see KEYS.md`);
   }
 }
 

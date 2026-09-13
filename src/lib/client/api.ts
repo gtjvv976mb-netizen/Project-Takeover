@@ -2,7 +2,17 @@
 import bs58 from "bs58";
 import type { WalletContextState } from "@solana/wallet-adapter-react";
 import { buildAuthMessage } from "@/lib/auth";
-import type { AppConfig, Listing, ListingEvent, SignedRequest, TokenInfo } from "@/lib/types";
+import type { AppConfig, Listing, ListingEvent, PumpControl, PumpControlVerdict, SignedRequest, TokenInfo } from "@/lib/types";
+
+/** What /api/listings/:id/handover answers for a pump.fun listing. */
+export type Handover = {
+  subject: string;
+  role: "buyer" | "seller";
+  complete: boolean | null;
+  control: PumpControl | null;
+  verdict: PumpControlVerdict;
+  handedOver: boolean;
+};
 
 async function parse<T>(res: Response): Promise<T> {
   const j = await res.json().catch(() => ({}));
@@ -28,4 +38,5 @@ export const api = {
   token: (mint: string) => fetch(`/api/token/${mint}`).then((r) => parse<TokenInfo>(r)),
   listings: (q: Record<string, string> = {}) => fetch(`/api/listings?${new URLSearchParams(q)}`).then((r) => parse<Listing[]>(r)),
   listing: (id: string) => fetch(`/api/listings/${id}`).then((r) => parse<{ listing: Listing; events: ListingEvent[] }>(r)),
+  handover: (id: string) => fetch(`/api/listings/${id}/handover`).then((r) => parse<Handover>(r)),
 };

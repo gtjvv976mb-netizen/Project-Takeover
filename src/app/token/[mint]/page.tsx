@@ -132,6 +132,9 @@ export default function TokenPage({ params }: { params: Promise<{ mint: string }
             {t?.pump ? <Chip tint="var(--color-tangerine)">pump.fun coin</Chip> : <Chip tint="var(--color-violet)">SPL token</Chip>}
             {revoked && <Chip tint="var(--color-blue)">Authorities revoked</Chip>}
             {t?.pump?.complete && <Chip tint="var(--color-blue)">Graduated</Chip>}
+            {t?.extensions?.program === "token-2022" && <Chip tint="var(--color-amber)">Token-2022</Chip>}
+            {t?.extensions?.risks.map((r) => <Chip key={r.code} tint={r.level === "critical" ? "var(--color-rose)" : "var(--color-amber)"}>{r.code.replace(/_/g, " ")}</Chip>)}
+            {t?.pump?.control?.kind === "sharing_config" && <Chip tint="var(--color-tangerine)">Creator fee shared</Chip>}
             {d.forSale && <Chip tint="var(--color-green)">For sale now</Chip>}
           </div>
           <h1 className="title-lg mt-3">{t?.name ?? "Unknown token"} {t?.symbol && <span className="text-muted">${t.symbol}</span>}</h1>
@@ -150,8 +153,32 @@ export default function TokenPage({ params }: { params: Promise<{ mint: string }
             {top10 !== null && (
               <Fact label="Top 10 holders" value={`${top10.toFixed(1)}% of supply`} tone={top10 > 50 ? "warn" : "good"} />
             )}
-            {t?.pump && <Fact label="pump.fun creator" value={shortKey(t.pump.creator, 6)} />}
+            {t?.pump && (
+              <Fact
+                label={t.pump.control?.source === "pool" ? "pump.fun creator (from the pool)" : "pump.fun creator"}
+                value={t.pump.control?.kind === "sharing_config"
+                  ? (t.pump.control.config ? `fee-sharing config · admin ${shortKey(t.pump.control.config.admin, 6)}${t.pump.control.config.adminRevoked ? " · locked" : ""}` : "fee-sharing config (unreadable)")
+                  : shortKey(t.pump.control?.raw ?? t.pump.creator, 6)}
+                tone={t.pump.control?.config?.adminRevoked ? "warn" : undefined}
+              />
+            )}
           </div>
+          {t?.pump?.control?.kind === "sharing_config" && t.pump.control.config && (
+            <div className="mt-3 rounded-xl border border-line bg-bg-2 p-3 text-xs">
+              <div className="kicker mb-1">Creator fee split</div>
+              <ul className="space-y-0.5 font-mono">
+                {t.pump.control.config.shareholders.map((sh) => (
+                  <li key={sh.address} className="flex justify-between gap-3"><span>{shortKey(sh.address, 6)}{sh.address === t.pump!.control!.config!.admin ? " (admin)" : ""}</span><span>{(sh.shareBps / 100).toFixed(2)}%</span></li>
+                ))}
+              </ul>
+              <p className="mt-2 text-faint">A sale of this coin&apos;s creator role only counts as delivered once the buyer is admin and sole shareholder at 100%.</p>
+            </div>
+          )}
+          {t?.extensions && t.extensions.risks.length > 0 && (
+            <div className="mt-3 space-y-2">
+              {t.extensions.risks.map((r) => <Alert key={r.code} kind={r.level === "critical" ? "error" : "warn"}>{r.text}</Alert>)}
+            </div>
+          )}
         </section>
 
         {d.listings.length > 0 && (

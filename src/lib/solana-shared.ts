@@ -1,8 +1,17 @@
 // Code shared by the browser and the server: program ids, PDAs, raw instruction builders.
 import { PublicKey, TransactionInstruction } from "@solana/web3.js";
 
+import type { PumpControl, PumpControlVerdict } from "./types";
+
 export const METADATA_PROGRAM_ID = new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
 export const PUMP_PROGRAM_ID = new PublicKey("6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P");
+/** pump.fun's fee program: owns every creator-fee sharing config. */
+export const PUMP_FEES_PROGRAM_ID = new PublicKey("pfeeUxB6jkeY1Hxd7CsFCAjcbHA9rWtchMGdZ6VojVZ");
+/** PumpSwap, where a coin trades after graduating. Its pool carries the creator role then. */
+export const PUMP_AMM_PROGRAM_ID = new PublicKey("pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA");
+export const WSOL_MINT = new PublicKey("So11111111111111111111111111111111111111112");
+/** Squads v4, the multisig the upgrade and config authorities are meant to live in. */
+export const SQUADS_V4_PROGRAM_ID = new PublicKey("SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf");
 
 export function metadataPda(mint: PublicKey): PublicKey {
   return PublicKey.findProgramAddressSync(
@@ -13,6 +22,40 @@ export function metadataPda(mint: PublicKey): PublicKey {
 
 export function bondingCurvePda(mint: PublicKey): PublicKey {
   return PublicKey.findProgramAddressSync([Buffer.from("bonding-curve"), mint.toBuffer()], PUMP_PROGRAM_ID)[0];
+}
+
+/**
+ * A Squads v4 vault: the address a multisig acts through. Seeds ["multisig", multisig,
+ * "vault", index] on the Squads program, per the Squads SDK. It is a PDA, so no private
+ * key exists for it; anything it signs was approved by the multisig's members.
+ */
+export function squadsVaultPda(multisig: PublicKey, index = 0): PublicKey {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("multisig"), multisig.toBuffer(), Buffer.from("vault"), Buffer.from([index])],
+    SQUADS_V4_PROGRAM_ID,
+  )[0];
+}
+
+/** Seeds ["sharing-config", mint] on the fee program, per pump.fun's published interface. */
+export function sharingConfigPda(mint: PublicKey): PublicKey {
+  return PublicKey.findProgramAddressSync([Buffer.from("sharing-config"), mint.toBuffer()], PUMP_FEES_PROGRAM_ID)[0];
+}
+
+/** The pump program's signer for the pool it creates at graduation. */
+export function poolAuthorityPda(mint: PublicKey): PublicKey {
+  return PublicKey.findProgramAddressSync([Buffer.from("pool-authority"), mint.toBuffer()], PUMP_PROGRAM_ID)[0];
+}
+
+/**
+ * The canonical PumpSwap pool for a graduated coin: index 0, created by the pump
+ * program's pool authority, quoted in whatever the curve was quoted in (SOL, or USDC
+ * since pump.fun added USDC curves).
+ */
+export function canonicalPoolPda(mint: PublicKey, quoteMint: PublicKey = WSOL_MINT): PublicKey {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("pool"), Buffer.from([0, 0]), poolAuthorityPda(mint).toBuffer(), mint.toBuffer(), quoteMint.toBuffer()],
+    PUMP_AMM_PROGRAM_ID,
+  )[0];
 }
 
 /** Parse the on-chain Metaplex Token Metadata account (v1 layout). */
@@ -53,9 +96,16 @@ export function parseBondingCurve(data: Uint8Array) {
   const tokenTotalSupply = u64(40);
   const complete = buf[48] === 1;
   const creator = buf.length >= 81 ? new PublicKey(buf.subarray(49, 81)) : null;
+  // Appended later still: is_mayhem_mode (81), is_cashback_coin (82), then the quote mint
+  // at 83, because curves can now be quoted in USDC as well as SOL. Older accounts stop
+  // before it, in which case SOL is the only thing a curve could have been quoted in.
+  // SOL curves store the all-zero address there, so "no quote mint" means SOL either way.
+  const quoteRaw = buf.length >= 115 ? new PublicKey(buf.subarray(83, 115)) : null;
+  const quoteMint = quoteRaw && !quoteRaw.equals(PublicKey.default) ? quoteRaw : null;
   return {
     complete,
     creator,
+    quoteMint,
     virtualTokenReserves,
     virtualSolReserves,
     realTokenReserves,
@@ -87,4 +137,128 @@ export function updateMetadataAuthorityIx(mint: PublicKey, currentAuthority: Pub
     ],
     data,
   });
+}
+
+/** Anchor discriminator of the Squads v4 Multisig account: sha256("account:Multisig")[0..8]. */
+const SQUADS_MULTISIG_DISCRIMINATOR = Buffer.from([224, 116, 121, 186, 68, 161, 79, 236]);
+
+/**
+ * Read a Squads v4 multisig's shape.
+ *
+ * Layout after the discriminator: create_key, config_authority, threshold u16,
+ * time_lock u32, transaction_index u64, stale_transaction_index u64,
+ * Option<rent_collector>, bump u8, then a Borsh vec of {key, permissions u8}.
+ *
+ * Threshold and member count are the whole point. A 1-of-1 multisig is a wallet wearing
+ * a multisig's clothes: one key still proposes, approves and executes alone, so nothing
+ * about the trust story changes. Anything reading this should say so rather than report
+ * "a multisig" and let the word do work the configuration does not.
+ */
+export function parseSquadsMultisig(data: Uint8Array) {
+  const b = Buffer.from(data);
+  if (b.length < 60 || !b.subarray(0, 8).equals(SQUADS_MULTISIG_DISCRIMINATOR)) return null;
+  let o = 8 + 32 + 32; // create_key, config_authority
+  const threshold = b.readUInt16LE(o); o += 2;
+  const timeLock = b.readUInt32LE(o); o += 4;
+  o += 8 + 8; // transaction_index, stale_transaction_index
+  o += b[o] === 1 ? 33 : 1; // Option<rent_collector>
+  o += 1; // bump
+  if (o + 4 > b.length) return null;
+  const memberCount = b.readUInt32LE(o); o += 4;
+  const members: string[] = [];
+  for (let i = 0; i < memberCount && o + 33 <= b.length; i++) {
+    members.push(new PublicKey(b.subarray(o, o + 32)).toBase58());
+    o += 33; // 32-byte key + 1-byte permission mask
+  }
+  return { threshold, memberCount, timeLock, members };
+}
+
+/** Anchor discriminator of pump.fun's SharingConfig account, from its published interface. */
+const SHARING_CONFIG_DISCRIMINATOR = Buffer.from([216, 74, 9, 0, 56, 140, 93, 75]);
+/** Anchor discriminator of PumpSwap's Pool account. */
+const POOL_DISCRIMINATOR = Buffer.from([241, 154, 109, 4, 17, 177, 109, 188]);
+
+/**
+ * Parse a pump.fun fee-sharing config.
+ *
+ * Layout after the discriminator: bump u8, version u8, status (a one-byte enum: 0 Paused,
+ * 1 Active), mint, admin, admin_revoked bool, then a Borsh vec of {address, share_bps u16}.
+ * Returns null for anything that is not a sharing config, so a caller can pass whatever
+ * the creator field pointed at and let the answer say what it was.
+ */
+export function parseSharingConfig(data: Uint8Array): PumpControl["config"] {
+  const buf = Buffer.from(data);
+  if (buf.length < 80 || !buf.subarray(0, 8).equals(SHARING_CONFIG_DISCRIMINATOR)) return null;
+  const version = buf[9];
+  const statusByte = buf[10];
+  const mint = new PublicKey(buf.subarray(11, 43));
+  const admin = new PublicKey(buf.subarray(43, 75));
+  const adminRevoked = buf[75] === 1;
+  const count = buf.readUInt32LE(76);
+  const shareholders: { address: string; shareBps: number }[] = [];
+  let o = 80;
+  for (let i = 0; i < count && o + 34 <= buf.length; i++) {
+    shareholders.push({ address: new PublicKey(buf.subarray(o, o + 32)).toBase58(), shareBps: buf.readUInt16LE(o + 32) });
+    o += 34;
+  }
+  void mint;
+  return {
+    address: "", // filled in by the caller, which knows the account's address
+    admin: admin.toBase58(),
+    adminRevoked,
+    status: statusByte === 1 ? "active" : statusByte === 0 ? "paused" : "unknown",
+    version,
+    shareholders,
+  };
+}
+
+/**
+ * Parse a PumpSwap pool far enough to read who collects its creator fees.
+ *
+ * Layout after the discriminator: pool_bump u8, index u16, creator, base_mint, quote_mint,
+ * lp_mint, pool_base_token_account, pool_quote_token_account, lp_supply u64, coin_creator.
+ */
+export function parsePool(data: Uint8Array) {
+  const buf = Buffer.from(data);
+  if (buf.length < 243 || !buf.subarray(0, 8).equals(POOL_DISCRIMINATOR)) return null;
+  return {
+    baseMint: new PublicKey(buf.subarray(43, 75)),
+    quoteMint: new PublicKey(buf.subarray(75, 107)),
+    coinCreator: new PublicKey(buf.subarray(211, 243)),
+  };
+}
+
+/**
+ * Does `wallet` hold the creator role outright?
+ *
+ * "Outright" means every basis point of the creator fee and the power to change that.
+ * A wallet that is admin but shares the fee has not been handed the coin; a wallet that
+ * collects all the fee but is not admin can lose it tomorrow; and a revoked config can
+ * never be handed to anyone, so nothing about it is sellable.
+ */
+export function pumpControlOf(control: PumpControl | null | undefined, wallet: string): PumpControlVerdict {
+  if (!control) return { full: false, shareBps: 0, isAdmin: false, revoked: false, reason: "The coin's creator could not be read from the chain." };
+  if (control.kind === "wallet") {
+    const full = control.raw === wallet;
+    return {
+      full, shareBps: full ? 10_000 : 0, isAdmin: full, revoked: false,
+      reason: full ? "This wallet is the on-chain creator." : `The on-chain creator is ${control.raw}, not this wallet.`,
+    };
+  }
+  const cfg = control.config;
+  if (!cfg) return { full: false, shareBps: 0, isAdmin: false, revoked: false, reason: "The creator field points at a fee-sharing config that could not be read." };
+  const shareBps = cfg.shareholders.filter((s) => s.address === wallet).reduce((a, s) => a + s.shareBps, 0);
+  const isAdmin = cfg.admin === wallet && !cfg.adminRevoked;
+  if (cfg.adminRevoked) {
+    return { full: false, shareBps, isAdmin: false, revoked: true, reason: "Fee sharing on this coin has been permanently locked. The creator role can no longer be transferred to anyone." };
+  }
+  if (isAdmin && shareBps === 10_000) {
+    return { full: true, shareBps, isAdmin, revoked: false, reason: "This wallet is the fee-sharing admin and receives the entire creator fee." };
+  }
+  const others = cfg.shareholders.filter((s) => s.address !== wallet && s.shareBps > 0).length;
+  const parts: string[] = [];
+  parts.push(isAdmin ? "This wallet is the fee-sharing admin" : `The fee-sharing admin is ${cfg.admin}`);
+  parts.push(`this wallet receives ${(shareBps / 100).toFixed(2)}% of the creator fee`);
+  if (others) parts.push(`${others} other wallet${others > 1 ? "s" : ""} share the rest`);
+  return { full: false, shareBps, isAdmin, revoked: false, reason: parts.join("; ") + "." };
 }

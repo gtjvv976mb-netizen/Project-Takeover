@@ -178,6 +178,7 @@ ed25519 signature over `Takeover\naction: <action>\nlisting: <id|->\nts: <timest
 | `GET /api/token/:mint` | authorities, metadata, pump.fun bonding curve | — |
 | `GET /api/listings?status=&type=&wallet=` | browse (`status` defaults to `active`) | — |
 | `GET /api/listings/:id` | one listing plus its event log | — |
+| `GET /api/listings/:id/handover` | pump.fun listings: who holds the creator role right now, resolved through any fee-sharing config | — |
 | `GET /api/activity` | the last 20 market events, for the ticker | — |
 | `GET /api/builders` | builder leaderboard | — |
 | `GET /api/builders/:wallet` | builder profile, track record and listings | — |
@@ -247,13 +248,16 @@ Anchor 0.31.1 (via `avm`).
 
 ## Before mainnet
 
+The full launch checklist, what was verified on 2026-09-13, and the researched feature
+roadmap live in [`LAUNCH.md`](LAUNCH.md). The short version:
+
 1. **Paid RPC** (Helius/Triton/QuickNode) for both `RPC_URL` and `NEXT_PUBLIC_RPC_URL`.
 2. **Escrow key custody**: the Anchor program in `programs/takeover-escrow` now exists and is tested; what remains is
    an independent audit and rewiring the API routes to build program transactions for the browser to sign, rather
    than signing with a server-held key.
 3. **Postgres** instead of SQLite once you have more than one server instance.
-4. **pump.fun creator handoff**: the bonding-curve `creator` read at byte offset 49 is best-effort. Verify against
-   pump.fun's current program layout (they shipped fee-splitting across up to 10 wallets and ownership transfer in
-   Jan 2026) and consider reading the graduated PumpSwap pool's `coin_creator` too.
+4. **pump.fun creator handoff**: done. The creator field is resolved through pump.fun's fee-sharing config and,
+   after graduation, read from the PumpSwap pool. Layouts are pinned by `npm run test:unit`; re-run it whenever
+   pump.fun publishes a new interface.
 5. Terms of service, KYC/AML posture, and a dispute-resolution policy for the off-chain asset class.
 6. Rate limiting on the API and a job that auto-refunds `paid` off-chain listings with no delivery after N days.

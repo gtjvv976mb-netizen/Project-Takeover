@@ -29,6 +29,66 @@ export interface OffchainAsset {
 
 export type ListingAsset = TokenAuthorityAsset | PumpCreatorAsset | OffchainAsset;
 
+/**
+ * Who actually controls a pump.fun coin's creator role.
+ *
+ * Since pump.fun's fee-sharing update (January 2026) the `creator` field on the bonding
+ * curve, and `coin_creator` on the graduated PumpSwap pool, can hold the address of a
+ * *sharing config* rather than a wallet. The config has an admin who can split the
+ * creator fees across up to ten wallets, hand the admin role on, or revoke it for good.
+ * Comparing the raw field to a wallet therefore answers the wrong question: a seller can
+ * "transfer" a config in which they still keep 90% of the fees. This resolves the field
+ * to what it means.
+ */
+export interface PumpControl {
+  /** The address the on-chain field actually holds. */
+  raw: string;
+  /** Which account it was read from. After graduation the pool is the one that pays. */
+  source: "bonding_curve" | "pool";
+  kind: "wallet" | "sharing_config";
+  config: {
+    address: string;
+    admin: string;
+    /** Once true the config can never change again — the role cannot be handed over. */
+    adminRevoked: boolean;
+    status: "active" | "paused" | "unknown";
+    version: number;
+    shareholders: { address: string; shareBps: number }[];
+  } | null;
+}
+
+/** Whether one wallet holds the creator role outright, and if not, why not. */
+export interface PumpControlVerdict {
+  full: boolean;
+  /** Basis points of the creator fee this wallet receives (10 000 = all of it). */
+  shareBps: number;
+  isAdmin: boolean;
+  revoked: boolean;
+  reason: string;
+}
+
+/**
+ * Token-2022 extensions that change what "owning the authorities" means.
+ *
+ * A permanent delegate can move any holder's tokens, a transfer hook runs its own program
+ * on every transfer, and a mint-close authority can close the mint and reinitialise the
+ * address. None of those are visible from the mint and freeze authorities alone.
+ */
+export interface TokenExtensions {
+  program: "spl-token" | "token-2022";
+  /** Extension names as spl-token reports them, for display. */
+  types: string[];
+  permanentDelegate: string | null;
+  transferHookProgram: string | null;
+  mintCloseAuthority: string | null;
+  /** Where the metadata pointer points; equal to the mint when metadata lives inside it. */
+  metadataPointer: string | null;
+  transferFeeBps: number | null;
+  defaultFrozen: boolean;
+  nonTransferable: boolean;
+  risks: { level: "critical" | "warn"; code: string; text: string }[];
+}
+
 export interface TokenInfo {
   mint: string;
   name?: string;
@@ -40,9 +100,16 @@ export interface TokenInfo {
   mintAuthority: string | null;
   freezeAuthority: string | null;
   updateAuthority: string | null;
+  /** Which program owns the mint and what extensions it carries. Absent on old snapshots. */
+  extensions?: TokenExtensions;
+  /** Where the update authority above was read from. Token-2022 mints can carry their own. */
+  metadataSource?: "metaplex" | "token-2022" | null;
   pump?: {
     bondingCurve: string;
+    /** The raw on-chain field. Prefer `control`, which says what it means. */
     creator: string | null;
+    /** Resolved control of the creator role. Null when the curve could not be read. */
+    control?: PumpControl | null;
     complete: boolean | null;
     /** SOL per token, from the bonding curve's virtual reserves. Null once graduated. */
     priceSol?: number | null;
@@ -157,6 +224,20 @@ export interface AppConfig {
    * Null means the program has been made immutable and the claim is unconditional.
    */
   upgradeAuthority: string | null;
+  /**
+   * What kind of account holds the upgrade authority. "wallet" is a single key that can
+   * replace the program alone; "squads" is a Squads v4 multisig, so an upgrade needs
+   * several signers and, with a time lock, is visible before it lands; "program" is some
+   * other program-owned account; null when immutable or unknown.
+   */
+  upgradeCustody: "wallet" | "squads" | "program" | null;
+  /** The Squads multisig the authorities are meant to live in, if one is declared. Public. */
+  squadsMultisig: string | null;
+  /**
+   * That multisig's actual shape. A 1-of-1 is a single key with extra steps, so the
+   * numbers are reported rather than the word: a reader can judge for themselves.
+   */
+  squads: { threshold: number; members: number; timeLockSeconds: number } | null;
 }
 
 export interface SignedRequest {

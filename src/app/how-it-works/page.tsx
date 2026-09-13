@@ -134,10 +134,20 @@ export default function HowItWorks() {
                       <a className="mono break-all text-blue hover:underline" href={explorerUrl(cfg, "address", cfg.upgradeAuthority)} target="_blank" rel="noreferrer">
                         {cfg.upgradeAuthority}
                       </a>
-                      . Whoever holds that key could deploy a version that does hold your funds. It is
-                      scheduled to be handed to a multisig or destroyed outright once the program has
-                      been audited — and this line is read from the chain, so it will say so when that
-                      happens rather than waiting for someone to update the copy.
+                      {cfg.upgradeCustody === "squads"
+                        ? <>, a vault of {cfg.squadsMultisig ? <a className="mono break-all text-blue hover:underline" href={`https://app.squads.so/squads/${cfg.squadsMultisig}/home`} target="_blank" rel="noreferrer">this Squads multisig</a> : "a Squads multisig"}
+                          {cfg.squads
+                            ? cfg.squads.threshold < 2
+                              ? <>, which needs only {cfg.squads.threshold} of its {cfg.squads.members} member{cfg.squads.members === 1 ? "" : "s"} to approve an upgrade. That is a single key with extra steps, and you should treat it as one until the threshold is raised.</>
+                              : <>: {cfg.squads.threshold} of {cfg.squads.members} members must approve an upgrade{cfg.squads.timeLockSeconds > 0 ? `, and a time lock holds it for ${Math.round(cfg.squads.timeLockSeconds / 3600)} hours after that, so it can be seen coming before it lands` : ", though no time lock delays it, so an approved upgrade lands at once"}. It is scheduled to be destroyed outright once the program has been audited.</>
+                            : <>: several people have to sign an upgrade. It is scheduled to be destroyed outright once the program has been audited.</>}</>
+                        : cfg.upgradeCustody === "wallet"
+                          ? ", a single wallet. One key could deploy a version that does hold your funds. It is scheduled to be handed to a multisig, then destroyed outright once the program has been audited."
+                          : cfg.upgradeCustody === "program"
+                            ? ", a program-derived address: no private key exists for it, so whichever program controls it decides. It is not one we have declared, so check it yourself."
+                            : ". Whoever controls that account could deploy a version that does hold your funds."}
+                      {" "}This line is read from the chain, so it will change when that happens
+                      rather than waiting for someone to update the copy.
                     </>
                   ) : (
                     <>
