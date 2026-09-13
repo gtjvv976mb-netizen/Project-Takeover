@@ -13,12 +13,13 @@
     "start": "next start -p ${PORT:-3000}",
     "lint": "eslint",
     "program:build": "./scripts/build-program.sh",
-    "program:test": "tsx --test-concurrency=1 tests/escrow.test.ts && tsx --test-concurrency=1 tests/metadata.test.ts && tsx --test-concurrency=1 tests/offers.test.ts",
+    "program:test": "npm run fixtures && tsx --test-concurrency=1 tests/escrow.test.ts && tsx --test-concurrency=1 tests/metadata.test.ts && tsx --test-concurrency=1 tests/offers.test.ts",
     "test:unit": "tsx --test tests/pump.test.ts tests/domain-proof.test.ts",
     "e2e:offers": "node scripts/e2e-offers.mjs",
     "prove": "node scripts/prove-handover.mjs",
     "e2e:browser": "tsx scripts/e2e-browser-paths.mts",
-    "preflight": "node scripts/preflight.mjs"
+    "preflight": "node scripts/preflight.mjs",
+    "fixtures": "node scripts/fetch-fixtures.mjs"
   },
   "dependencies": {
     "@solana/spl-token": "^0.4.15",
