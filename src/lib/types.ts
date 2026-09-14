@@ -200,6 +200,11 @@ export interface Listing {
   settlementSig: string | null;
   deliveryNote: string | null;
   disputeReason: string | null;
+  /**
+   * Stored banner, as the file's name on the service's disk. Served from
+   * /api/uploads/<image>. Null means the listing shows its generated artwork instead.
+   */
+  image?: string | null;
   createdAt: number;
   updatedAt: number;
 }

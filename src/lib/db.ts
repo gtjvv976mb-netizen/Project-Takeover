@@ -91,7 +91,27 @@ function open() {
       created_at INTEGER NOT NULL
     );
   `);
+  addColumns(db, "listings", { image: "TEXT" });
   return db;
+}
+
+/**
+ * `CREATE TABLE IF NOT EXISTS` does nothing to a table that already exists, so a column
+ * added after a deploy never reaches the live database on its own. Adding it here keeps
+ * the schema in one file rather than in a migrations folder nobody runs; SQLite's
+ * ALTER TABLE ADD COLUMN is cheap and does not rewrite the table.
+ */
+function addColumns(
+  db: InstanceType<SqliteModule["DatabaseSync"]>,
+  table: string,
+  columns: Record<string, string>,
+) {
+  const present = new Set(
+    (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map((c) => c.name),
+  );
+  for (const [name, decl] of Object.entries(columns)) {
+    if (!present.has(name)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${decl}`);
+  }
 }
 
 export function db() {
@@ -119,9 +139,25 @@ function rowToListing(r: Row): Listing {
     settlementSig: (r.settlement_sig as string) ?? null,
     deliveryNote: (r.delivery_note as string) ?? null,
     disputeReason: (r.dispute_reason as string) ?? null,
+    image: (r.image as string) ?? null,
     createdAt: Number(r.created_at),
     updatedAt: Number(r.updated_at),
   };
+}
+
+/** Point a listing at a stored banner, or clear it with null. */
+export function setListingImage(id: string, image: string | null) {
+  db().prepare("UPDATE listings SET image = ?, updated_at = ? WHERE id = ?").run(image, Date.now(), id);
+}
+
+/**
+ * How many listings point at a stored file. Banners are content-addressed, so the same
+ * bytes uploaded twice are one file with two referrers, and deleting one listing's
+ * banner must not pull the picture out from under the other.
+ */
+export function imageRefCount(image: string): number {
+  const r = db().prepare("SELECT COUNT(*) AS n FROM listings WHERE image = ?").get(image) as { n: number };
+  return Number(r.n);
 }
 
 export function insertListing(l: Listing) {

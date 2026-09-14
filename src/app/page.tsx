@@ -34,61 +34,64 @@ function Hero({ live, settled, builders, onSearch, query }: {
 
       <div className="wrap relative z-10 py-16 md:py-24">
         <div className="mx-auto max-w-4xl text-center">
-          <div className="flex flex-wrap items-center justify-center gap-2">
-            <Link href="/how-it-works" className="pill" style={{ ["--tint" as string]: "var(--color-brand)" }}>
-              ◆ Solana&apos;s first trustless handover
-            </Link>
+          {/* Only claim a crowd when there is one. A pill reading "0 live right now" is
+              the first thing a newcomer sees, and it reads as "nobody is here". */}
+          {live > 0 && (
             <span className="pill" style={{ ["--tint" as string]: "var(--color-green)" }}>
-              <span className="live-dot" /> {live} live right now
+              <span className="live-dot" /> {live} {live === 1 ? "project" : "projects"} looking for someone right now
             </span>
-          </div>
+          )}
 
           <h1 className="display mt-6">
-            Think you&rsquo;d run it better?<br className="hidden sm:block" />{" "}
-            <span style={{ background: "linear-gradient(90deg, var(--color-brand), var(--color-teal))", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>
-              Buy it.
+            Good projects shouldn&rsquo;t die{" "}
+            <span className="whitespace-nowrap">when the founder{" "}
+              <span style={{ background: "linear-gradient(96deg, var(--color-brand), var(--color-teal))", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>
+                moves on.
+              </span>
             </span>
           </h1>
 
-          <p className="lead mx-auto mt-5">
-            Memecoins, pump.fun coins, sites and communities — bought outright, not traded.
-            The chain proves who owns it. Nobody holds the money but the code.
+          <p className="lead mx-auto mt-5 text-center">
+            This is where Solana builders hand over what they made — a token, a pump.fun coin,
+            a whole site — to someone ready to run it next. The money and the keys change hands
+            in the same moment, so neither of you has to trust the other.
           </p>
 
-          <div className="mx-auto mt-8 flex max-w-xl flex-col gap-3 sm:flex-row">
+          {/* Two doors, named for the people walking through them, rather than one
+              search box a newcomer has nothing to type into yet. */}
+          <div className="mx-auto mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
+            <a href="#market" className="w-full sm:w-auto">
+              <Button className="w-full !px-7 !py-3.5">Find something to run</Button>
+            </a>
+            <Link href="/sell" className="w-full sm:w-auto">
+              <Button variant="secondary" className="w-full !px-7 !py-3.5">I built something to hand over</Button>
+            </Link>
+          </div>
+
+          <div className="mx-auto mt-7 flex max-w-lg">
             <input
               value={query}
               onChange={(e) => onSearch(e.target.value)}
-              placeholder="Search projects, tokens, builders…"
+              placeholder="Or search by name, ticker or builder…"
               aria-label="Search projects"
-              className="input flex-1 !py-3.5 shadow-[var(--shadow-card)]"
+              className="input flex-1"
             />
-            <a href="#market"><Button className="w-full sm:w-auto !py-3.5">Browse projects</Button></a>
           </div>
 
-          {/* The headline speaks only to buyers. This is the other half of the market
-              given the same shape — question, then a two-word instruction — so a dev
-              landing here finds their own door instead of reading past the buyer's. */}
-          <Link
-            href="/sell"
-            className="group mt-5 inline-flex items-center gap-2 text-[15px] font-semibold text-muted transition-colors hover:text-ink"
-          >
-            Built something?
-            <span
-              className="underline decoration-2 underline-offset-4"
-              style={{ color: "var(--color-teal)", textDecorationColor: "color-mix(in srgb, var(--color-teal) 45%, transparent)" }}
-            >
-              Sell it.
-            </span>
-            <span aria-hidden className="transition-transform group-hover:translate-x-0.5">→</span>
-          </Link>
-
-          <div className="mt-4 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[13px] text-muted">
-            <span><strong className="text-ink">{liveCount}</strong> for sale</span>
-            <span><strong className="text-ink">{settledSol.toFixed(1)} SOL</strong> traded</span>
-            <span><strong className="text-ink">{builders}</strong> builders</span>
+          {/* Numbers only once they say something. On a quiet day this is a friendly
+              line instead of three zeros in a row. */}
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[13.5px] text-muted">
+            {live > 0 || settled > 0 || builders > 0 ? (
+              <>
+                {live > 0 && <span><strong className="text-ink">{liveCount}</strong> for sale</span>}
+                {settled > 0 && <span><strong className="text-ink">{settledSol.toFixed(1)} SOL</strong> handed over</span>}
+                {builders > 0 && <span><strong className="text-ink">{builders}</strong> {builders === 1 ? "builder" : "builders"}</span>}
+              </>
+            ) : (
+              <span>New and quiet — which makes this a good moment to be the first listing people see.</span>
+            )}
             <span className="hidden items-center gap-1.5 sm:inline-flex">
-              <span className="live-dot" /> Solana slot <SlotHeight />
+              <span className="live-dot" /> Live on Solana, slot <SlotHeight />
             </span>
           </div>
         </div>
@@ -131,8 +134,8 @@ function Pitch() {
               Nobody holds the keys.<br />Not even us.
             </h3>
             <p className="mt-2 text-[15px] leading-relaxed text-muted">
-              Solana&apos;s first trustless handover: your money and the token&apos;s controls swap in one
-              instruction, held by code no human can unlock.
+              Your money waits in code, not in our account. When a sale goes through, the payment and
+              the controls move together — so neither of you has to go first.
             </p>
             <Link href="/how-it-works" className="mt-3 inline-flex items-center gap-1.5 text-[14px] font-semibold text-brand hover:gap-2.5">
               See how <span aria-hidden>→</span>
@@ -142,11 +145,11 @@ function Pitch() {
           <div style={{ ["--i" as string]: 2 }} className="rounded-2xl border border-line bg-bg p-6">
             <div className="text-[26px]" aria-hidden>🚀</div>
             <h3 className="mt-3 text-[21px] font-bold leading-snug text-ink">
-              Stop buying bags.<br />Buy the whole project.
+              The whole thing,<br />not just the bags.
             </h3>
             <p className="mt-2 text-[15px] leading-relaxed text-muted">
-              Buy a memecoin outright and walk away owning it — the mint, the metadata, the creator
-              fees, the ticker. Not a position. The whole project.
+              Take a coin on properly and you walk away owning it — the mint, the metadata, the
+              creator fees, the ticker. Not a position in it. The thing itself.
             </p>
           </div>
         </div>
