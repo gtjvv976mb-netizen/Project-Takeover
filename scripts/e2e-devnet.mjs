@@ -8,6 +8,7 @@ import { Connection, Keypair, LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transa
 import { AuthorityType, createMint, createSetAuthorityInstruction, getMint } from "@solana/spl-token";
 import nacl from "tweetnacl";
 import bs58 from "bs58";
+import { stageCover } from "./cover.mjs";
 import fs from "node:fs";
 
 const BASE = process.argv[2] ?? "http://localhost:3000";
@@ -73,6 +74,7 @@ const priceSol = 0.05;
 let l = await post("/api/listings", seller, "create", null, {
   type: "token_authority", title: "E2E test token", description: "auto test", priceSol,
   asset: { mint: mint.toBase58(), authorities: ["mint", "freeze"] },
+  image: await stageCover(BASE, seller, "e2e-devnet-token"),
 });
 log("listing created", l.id, l.status);
 if (l.status !== "draft") throw new Error("expected draft");
@@ -114,7 +116,7 @@ if (m.mintAuthority?.toBase58() !== buyer.publicKey.toBase58()) throw new Error(
 if (m.freezeAuthority?.toBase58() !== buyer.publicKey.toBase58()) throw new Error("buyer did not get freeze authority");
 
 // 7. offchain listing + release flow
-let o = await post("/api/listings", seller, "create", null, { type: "offchain", title: "E2E website", description: "x", priceSol: 0.02, asset: { category: "website", links: ["https://example.com"], deliverables: "logins" } });
+let o = await post("/api/listings", seller, "create", null, { type: "offchain", title: "E2E website", description: "x", priceSol: 0.02, asset: { category: "website", links: ["https://example.com"], deliverables: "logins" }, image: await stageCover(BASE, seller, "e2e-devnet-site") });
 log("offchain listing", o.id, o.status);
 const payTx2 = new Transaction()
   .add(SystemProgram.transfer({ fromPubkey: buyer.publicKey, toPubkey: escrow, lamports: 0.02 * LAMPORTS_PER_SOL }));

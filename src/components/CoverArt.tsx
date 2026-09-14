@@ -1,23 +1,22 @@
 "use client";
-import { useId, useMemo } from "react";
-import { hash, rosette } from "@/lib/guilloche";
+import { hash } from "@/lib/guilloche";
 
 /**
- * Artwork for a listing.
+ * A listing's picture.
  *
- * This used to be a pastel mesh gradient with three soft blobs — the same picture every
- * marketplace and AI startup has shipped since 2023. It looked pleasant and said nothing:
- * swap it onto a different product and nobody would notice.
+ * This used to draw a generated engraving whenever a listing had no picture of its own —
+ * a guilloche rosette struck from the listing's id. It was nice to look at and it was a
+ * lie: a wall of listings all wearing handsome artwork nobody made, where the one thing a
+ * buyer wants to see is the actual project. Sellers left it in place precisely because it
+ * did not look broken, so the market filled up with decoration.
  *
- * It is now an engraved rosette, the guilloche you find on a share certificate or a
- * banknote. That is what a listing here actually is — a certificate of title — and the
- * pattern is struck from the asset's own seed, so it is a fingerprint of the thing being
- * sold rather than stock decoration. Two listings can never share a face.
- *
- * The signature is unchanged, so every call site keeps working untouched.
+ * So the decoration is gone. A cover is now required when a listing is created, and the
+ * order of preference is: the seller's own cover, then the token's own artwork for a coin
+ * that has some, and otherwise a plain panel that reads as missing — which is the truth,
+ * and which is what puts an "add a cover" prompt in front of a seller who skipped it.
  */
 
-/** One colour per rosette, drawn from the same family the categories use. */
+/** One colour per listing, used for borders and hover states around the site. */
 const INKS: string[] = [
   "#6C4BF5", // grape
   "#2F8F62", // sage
@@ -29,7 +28,6 @@ const INKS: string[] = [
   "#5B4BC4", // indigo
 ];
 
-/** The tint a listing is keyed to elsewhere in the UI (borders, hover states). */
 export function coverAccent(seed: string): string {
   return INKS[hash(seed) % INKS.length];
 }
@@ -43,90 +41,51 @@ export function CoverArt({
   rounded = "rounded-t-[17px]",
 }: {
   seed: string;
+  /** A token's own artwork, from its metadata. Square, so it is shown whole, not cropped. */
   image?: string | null;
   symbol?: string | null;
-  /**
-   * A banner the seller uploaded. Unlike `image` — a token's own artwork, which sits
-   * inset on the engraving like a coin on a certificate — this is the seller's own
-   * picture for this listing, so it fills the frame and the engraving steps aside.
-   */
+  /** The seller's cover for this listing. It fills the frame — it was chosen for this. */
   banner?: string | null;
   className?: string;
   rounded?: string;
 }) {
-  const id = useId().replace(/:/g, "");
-  const art = useMemo(() => {
-    const h = hash(seed);
-    const ink = INKS[h % INKS.length];
-    // Each ring takes its gearing from a different slice of the hash, so listings whose
-    // seeds share a prefix still come out visibly different.
-    const rings = [0, 1, 2].map((i) => {
-      const b = (h >> (i * 6)) & 0xff;
-      const R = 88 - i * 16;
-      const r = 7 + (b % 12) + i * 2;
-      const d = 11 + ((b >> 3) % 24);
-      return { d: rosette(R, r, d), w: 0.5 - i * 0.07, o: 0.9 - i * 0.18 };
-    });
-    return { ink, rings, angle: h % 360 };
-  }, [seed]);
+  const ink = coverAccent(seed);
+  const frame = `relative overflow-hidden ${rounded} ${className}`;
+  const ground = { background: `color-mix(in srgb, ${ink} 7%, var(--color-surface))` };
 
   if (banner) {
     return (
-      <div
-        className={`relative overflow-hidden ${rounded} ${className}`}
-        style={{ background: `color-mix(in srgb, ${art.ink} 7%, var(--color-surface))` }}
-      >
+      <div className={frame} style={ground}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={banner} alt="" className="absolute inset-0 h-full w-full object-cover" loading="lazy" />
       </div>
     );
   }
 
-  return (
-    <div
-      className={`relative overflow-hidden ${rounded} ${className}`}
-      style={{ background: `color-mix(in srgb, ${art.ink} 7%, var(--color-surface))` }}
-    >
-      <svg viewBox="0 0 200 200" preserveAspectRatio="xMidYMid meet" className="absolute inset-0 h-full w-full" aria-hidden>
-        <defs>
-          <radialGradient id={`c${id}`} cx="50%" cy="44%" r="62%">
-            <stop offset="0" stopColor={art.ink} stopOpacity="1" />
-            <stop offset="1" stopColor={art.ink} stopOpacity="0.22" />
-          </radialGradient>
-        </defs>
-        <g transform={`rotate(${art.angle} 100 100)`}>
-          {art.rings.map((r, i) => (
-            <path key={i} d={r.d} fill="none" stroke={`url(#c${id})`} strokeWidth={r.w} opacity={r.o} />
-          ))}
-        </g>
-      </svg>
-
-      {image ? (
-        <div className="absolute inset-0 grid place-items-center">
+  // A coin's own artwork is square and usually a logo, so cropping it to a letterbox cuts
+  // the logo in half. Blur a copy to fill the frame and sit the real thing on top of it.
+  if (image) {
+    return (
+      <div className={frame} style={ground}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={image} alt="" aria-hidden loading="lazy"
+          className="absolute inset-0 h-full w-full scale-110 object-cover"
+          style={{ filter: "blur(22px) saturate(1.3)", opacity: 0.55 }} />
+        <div className="absolute inset-0 grid place-items-center p-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={image}
-            alt=""
-            className="h-[52%] w-[52%] rounded-xl border border-line object-cover"
-            style={{ boxShadow: "3px 3px 0 color-mix(in srgb, var(--color-ink) 12%, transparent)" }}
-            loading="lazy"
-          />
+          <img src={image} alt={symbol ?? ""} loading="lazy"
+            className="h-full max-h-full w-auto max-w-[62%] rounded-xl border border-line object-contain"
+            style={{ boxShadow: "0 8px 24px color-mix(in srgb, var(--color-ink) 22%, transparent)", background: "var(--color-surface)" }} />
         </div>
-      ) : symbol ? (
-        <div className="absolute inset-0 grid place-items-center">
-          <span
-            className="rounded-lg px-3 py-1.5 font-mono text-[clamp(12px,1.9vw,16px)] font-semibold uppercase tracking-[.1em]"
-            style={{
-              // mixing toward --color-ink lightens on dark and darkens on light
-              color: `color-mix(in srgb, ${art.ink} 62%, var(--color-ink))`,
-              background: "var(--color-surface)",
-              border: `1.5px solid color-mix(in srgb, ${art.ink} 34%, transparent)`,
-            }}
-          >
-            {symbol.slice(0, 5)}
-          </span>
-        </div>
-      ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <div className={`${frame} grid place-items-center border-b border-line`} style={ground}>
+      <span className="px-4 text-center text-[12px] font-semibold uppercase tracking-[.12em] text-faint">
+        {symbol ? `$${symbol.slice(0, 8)}` : "No cover image"}
+      </span>
     </div>
   );
 }

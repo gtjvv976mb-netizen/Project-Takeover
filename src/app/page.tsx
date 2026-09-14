@@ -43,18 +43,18 @@ function Hero({ live, settled, builders, onSearch, query }: {
           )}
 
           <h1 className="display mt-6">
-            Good projects shouldn&rsquo;t die{" "}
-            <span className="whitespace-nowrap">when the founder{" "}
+            Nobody trusts anybody.{" "}
+            <span className="whitespace-nowrap">
               <span style={{ background: "linear-gradient(96deg, var(--color-brand), var(--color-teal))", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>
-                moves on.
+                Everybody gets paid.
               </span>
             </span>
           </h1>
 
           <p className="lead mx-auto mt-5 text-center">
-            This is where Solana builders hand over what they made — a token, a pump.fun coin,
-            a whole site — to someone ready to run it next. The money and the keys change hands
-            in the same moment, so neither of you has to trust the other.
+            The home for Solana builders. Sell what you shipped, commission what you need built,
+            and hire from people whose track record is on chain. Escrow holds the money until
+            the work lands — so strangers can do business on day one.
           </p>
 
           {/* Two doors, named for the people walking through them, rather than one
@@ -64,9 +64,19 @@ function Hero({ live, settled, builders, onSearch, query }: {
               <Button className="w-full !px-7 !py-3.5">Find something to run</Button>
             </a>
             <Link href="/sell" className="w-full sm:w-auto">
-              <Button variant="secondary" className="w-full !px-7 !py-3.5">I built something to hand over</Button>
+              <Button variant="secondary" className="w-full !px-7 !py-3.5">I built something to sell</Button>
             </Link>
           </div>
+
+          {/* The third door. Commissioning is the half of the site the two buttons above
+              do not describe, and it is the one somebody with no wallet can start today. */}
+          <p className="mt-4 text-[14px] text-muted">
+            Or{" "}
+            <Link href="/requests" className="font-semibold text-ink underline underline-offset-4 hover:text-brand">
+              post what you need built
+            </Link>{" "}
+            and let developers come to you.
+          </p>
 
           <div className="mx-auto mt-7 flex max-w-lg">
             <input

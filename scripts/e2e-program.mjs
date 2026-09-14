@@ -11,6 +11,7 @@ import { Connection, Keypair, LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transa
 import { createInitializeMintInstruction, getMint, MINT_SIZE, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import nacl from "tweetnacl";
 import bs58 from "bs58";
+import { stageCover } from "./cover.mjs";
 
 const BASE = process.argv[2] ?? "http://localhost:3000";
 const RPC = process.env.RPC_URL ?? "http://127.0.0.1:8899";
@@ -80,6 +81,7 @@ log("mint created", mint.publicKey.toBase58());
 const listing = await post("/api/listings", seller, "create", null, {
   type: "token_authority", title: "E2E on-chain token", description: "settled by the program", priceSol: PRICE / LAMPORTS_PER_SOL,
   asset: { mint: mint.publicKey.toBase58(), authorities: ["mint", "freeze"] },
+  image: await stageCover(BASE, seller, "e2e-token"),
 });
 log("listing row", listing.id, listing.status);
 
@@ -124,6 +126,7 @@ if (final.listing.status !== "sold") throw new Error("site did not reflect the s
 const off = await post("/api/listings", seller, "create", null, {
   type: "offchain", title: "E2E escrowed project", description: "tests the escrowed path", priceSol: PRICE / LAMPORTS_PER_SOL,
   asset: { category: "project", links: [], deliverables: "repo + domain" },
+  image: await stageCover(BASE, seller, "e2e-offchain"),
 });
 await sp.methods.createListing(idBytes(off.id), { offchain: {} }, new BN(PRICE), 0, 1)
   .accountsPartial({ config: configPda(PID), listing: listingPda(seller.publicKey, off.id, PID), seller: seller.publicKey, mint: null, systemProgram: SystemProgram.programId }).rpc();

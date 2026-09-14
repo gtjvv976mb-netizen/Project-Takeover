@@ -243,18 +243,24 @@ export function imageRefCount(image: string): number {
   return Number(r.n);
 }
 
+/** Every cover a listing still points at — what a sweep of the upload directory must keep. */
+export function referencedImages(): Set<string> {
+  const rows = db().prepare("SELECT DISTINCT image FROM listings WHERE image IS NOT NULL").all() as Row[];
+  return new Set(rows.map((r) => String(r.image)));
+}
+
 export function insertListing(l: Listing) {
   db()
     .prepare(
       `INSERT INTO listings (id,type,title,description,price_lamports,seller,buyer,status,asset_json,mint,token_json,
-        escrow_sig,payment_sig,settlement_sig,delivery_note,dispute_reason,created_at,updated_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+        escrow_sig,payment_sig,settlement_sig,delivery_note,dispute_reason,image,created_at,updated_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
     )
     .run(
       l.id, l.type, l.title, l.description, l.priceLamports, l.seller, l.buyer, l.status,
       JSON.stringify(l.asset), l.mint, l.token ? JSON.stringify(l.token) : null,
       l.escrowSig, l.paymentSig, l.settlementSig, l.deliveryNote, l.disputeReason,
-      l.createdAt, l.updatedAt
+      l.image ?? null, l.createdAt, l.updatedAt
     );
   addEvent(l.id, "created", { seller: l.seller, type: l.type });
 }

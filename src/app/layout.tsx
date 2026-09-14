@@ -21,9 +21,9 @@ export const viewport = {
   ],
 };
 
-const TITLE = "Project: Takeover — good projects shouldn't die when the founder moves on";
+const TITLE = "Project: Takeover — nobody trusts anybody, everybody gets paid";
 const DESCRIPTION =
-  "Where Solana builders hand over what they made — a token, a pump.fun coin, a whole site — to someone ready to run it next. The money and the keys change hands in the same moment, so neither of you has to trust the other.";
+  "The home for Solana builders. Sell what you shipped, commission what you need built, and hire from people whose track record is on chain. Escrow holds the money until the work lands — so strangers can do business on day one.";
 
 /**
  * The site had no Open Graph tags at all, so a pasted link showed as bare text: no image,
@@ -43,7 +43,7 @@ export const metadata: Metadata = {
     siteName: "Project: Takeover",
     title: TITLE,
     description: DESCRIPTION,
-    images: [{ url: "/brand/og.png", width: 1200, height: 630, alt: "Project: Takeover — hand over what you built, on Solana" }],
+    images: [{ url: "/brand/og.png", width: 1200, height: 630, alt: "Project: Takeover — nobody trusts anybody, everybody gets paid" }],
   },
   twitter: {
     card: "summary_large_image",

@@ -27,7 +27,7 @@ export function SiteFooter({ config }: { config: AppConfig }) {
               <Logo size={28} />
               <span className="font-bold text-ink">Project: Takeover</span>
             </div>
-            <p className="mt-3 text-muted">A safer way to hand over what you built on Solana.</p>
+            <p className="mt-3 text-muted">Nobody trusts anybody. Everybody gets paid.</p>
           </div>
           <div className="space-y-2">
             <div className="kicker">Explore</div>
