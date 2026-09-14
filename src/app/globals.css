@@ -1,49 +1,67 @@
 @import "tailwindcss";
 
-/* ---------- Project: Takeover — light, colourful, friendly ----------
-   A soft daylight interface. White cards on a tinted ground, generous
-   rounding, soft shadows, and one colour per asset category so the market
-   is readable at a glance.                                              */
+/* ---------- Project: Takeover — a warm shopfront ----------
+   The old skin was a banknote: hard offset shadows, engraved rosettes, wide
+   monospace capitals. Precise, and about as welcoming as a bank counter.
+
+   This one keeps the warmth of paper and spends the craft on softness instead:
+   diffused shadows the colour of the ground rather than black bars behind every
+   box, rounder corners, and a dark theme that is warm cocoa rather than the
+   near-black everything else on a Solana screen already is.
+
+   Every colour is a token and every component reads one, so the two themes stay
+   in step and a component never hard-codes a value that only works in one.  */
 
 @theme {
-  /* ---- ground & surfaces ---- */
-  --color-bg:        #FAF6EF; /* warm paper — where everyone else puts cool grey */
-  --color-bg-2:      #F2EDE3; /* recessed wells, inputs */
-  --color-surface:   #FFFFFF; /* crisp white cards on the warm ground */
-  --color-line:      #E9E1D4; /* hairlines and card borders */
-  --color-line-2:    #D8CEBC; /* stronger dividers */
+  /* ---- ground & surfaces ----
+     Paper, not white. The surface sits a shade above the ground rather than
+     jumping to #FFF, which on a cream ground reads clinical and cold. */
+  --color-bg:        #FBF7F0; /* warm paper */
+  --color-bg-2:      #F3EDE3; /* recessed wells, inputs */
+  --color-surface:   #FFFCF7; /* cards — warm white, never pure white */
+  --color-line:      #EBE2D4; /* hairlines and card borders */
+  --color-line-2:    #DBD0BE; /* stronger dividers */
 
   /* ---- text ---- */
-  --color-ink:       #241F1A; /* headings and body */
-  --color-body:      #4D453B; /* paragraph text */
-  --color-muted:     #5E564A; /* secondary */
-  --color-faint:     #8A8073; /* meta, timestamps */
+  --color-ink:       #2A231C; /* headings — warm near-black, never #000 */
+  --color-body:      #52483C; /* paragraph text */
+  --color-muted:     #6B6053; /* secondary */
+  --color-faint:     #8F8475; /* meta, timestamps */
 
-  /* ---- brand & categories ---- */
-  --color-on-tint:   #FFFFFF; /* label on a solid tint fill — flips with the theme */
-  --color-brand:     #6C4BF5; /* primary action */
+  /* ---- brand & categories ----
+     Violet stays the action colour — it is the mark, the token art and the
+     banner — but everything around it is warmed, and honey joins as the second
+     voice so the palette is not one cool note on cream. */
+  --color-on-tint:   #FFFFFF;
+  --color-brand:     #6B4BE8; /* primary action */
   --color-brand-2:   #A78BFA; /* lighter brand, gradients */
-  --color-violet:    #6C4BF5; /* token authorities */
-  --color-tangerine: #D65B2E; /* pump.fun ownership */
-  --color-teal:      #17897E; /* projects, sites & socials */
+  --color-violet:    #6B4BE8; /* token authorities */
+  --color-tangerine: #D2582B; /* pump.fun ownership */
+  --color-teal:      #147F75; /* projects, sites & socials */
   --color-blue:      #2C6ECB; /* verified / read from chain */
-  --color-amber:     #C07A16; /* SOL amounts, money in escrow */
-  --color-rose:      #D6335C; /* disputes, danger */
-  --color-green:     #17864F; /* live, for sale */
+  --color-amber:     #B87514; /* SOL amounts, money in escrow */
+  --color-honey:     #E0A33E; /* warm highlight — welcomes, empty states */
+  --color-rose:      #CE3257; /* disputes, danger */
+  --color-green:     #157A48; /* live, for sale */
 
-  /* ---- surfaces that colour mixes lean on ----
-     Every tint in the UI is mixed toward this rather than toward literal white, so the
-     same `color-mix` expression stays legible when the ground goes dark. */
-  --color-tint-base: #FFFFFF;
+  /* Every tint mixes toward this rather than literal white, so one expression
+     stays legible when the ground goes dark. */
+  --color-tint-base: #FFFCF7;
 
-  /* ---- soft depth ---- */
-  --edge:         #EFE7D9;  /* the solid colour a card is offset onto */
-  --shadow-card:  4px 4px 0 var(--edge);
-  --shadow-lift:  8px 9px 0 color-mix(in srgb, var(--accent, var(--color-brand)) 22%, var(--edge));
-  --shadow-inset: inset 0 1px 0 rgba(255,255,255,.7);
-  --sheen: rgba(255,255,255,.85);   /* the streak that sweeps a loading skeleton */
+  /* ---- depth ----
+     Soft and warm. A shadow here is the ground gathering under an object, not a
+     black bar stuck behind it, so nothing looks pasted on. */
+  --shadow-card:  0 1px 2px rgba(74, 58, 38, .05), 0 6px 18px -10px rgba(74, 58, 38, .22);
+  --shadow-lift:  0 2px 6px rgba(74, 58, 38, .07), 0 18px 38px -16px color-mix(in srgb, var(--accent, var(--color-brand)) 40%, rgba(74, 58, 38, .3));
+  --shadow-soft:  0 1px 3px rgba(74, 58, 38, .06);
+  --shadow-inset: inset 0 1px 0 rgba(255, 255, 255, .6);
+  --sheen: rgba(255,255,255,.85);
 
-  --hero-scrim: linear-gradient(to bottom, rgba(250,246,239,.22), rgba(250,246,239,.62), var(--color-bg));
+  --hero-scrim: linear-gradient(to bottom, rgba(251,247,240,.30), rgba(251,247,240,.72), var(--color-bg));
+
+  /* ---- shape ---- */
+  --r-card: 22px;
+  --r-ctl:  14px;
 
   /* ---- type ---- */
   --font-display: var(--font-display-face), ui-sans-serif, system-ui, sans-serif;
@@ -61,44 +79,45 @@
 :root { color-scheme: light; }
 
 /* ---------- dark ----------
-   Lights on, in the dark: the same daylight layout on the deep indigo the coin art uses.
-   Only tokens are redefined — every component reads them, so nothing else has to change.
-   Tailwind emits the @theme block on bare `:root`; this attribute selector outranks it. */
+   Warm cocoa rather than the near-black every other Solana site defaults to.
+   The surface lifts clearly off the ground so cards still read as objects
+   without needing a hard border, and the text is cream rather than white. */
 :root[data-theme="dark"] {
   color-scheme: dark;
 
-  --color-bg:        #17130F;
-  --color-bg-2:      #201A15;
-  --color-surface:   #221C16;
-  --color-line:      #352C23;
-  --color-line-2:    #4A3E30;
+  --color-bg:        #1E1714;
+  --color-bg-2:      #271F1A;
+  --color-surface:   #2C231D;
+  --color-line:      #3D3129;
+  --color-line-2:    #524337;
 
-  --color-ink:       #F7F1E7;
-  --color-body:      #D5CBBD;
-  --color-muted:     #B4A997;
-  --color-faint:     #8A8073;
+  --color-ink:       #F8F2E8;
+  --color-body:      #DCD1C1;
+  --color-muted:     #B9AC99;
+  --color-faint:     #938878;
 
-  /* lifted a few points each: the light-theme values go muddy on a dark ground */
-  --color-brand:     #9A80FF;
-  --color-brand-2:   #B8A4FF;
-  --color-violet:    #9A80FF;
-  --color-tangerine: #EF8052;
-  --color-teal:      #46BFB2;
-  --color-blue:      #6EA4FF;
-  --color-amber:     #EDB44E;
-  --color-rose:      #FF6B8E;
-  --color-green:     #4FBE84;
+  /* lifted: the light-theme values go muddy on a dark ground */
+  --color-brand:     #A78BFA;
+  --color-brand-2:   #C4B2FF;
+  --color-violet:    #A78BFA;
+  --color-tangerine: #F28B5D;
+  --color-teal:      #4FC8BA;
+  --color-blue:      #7EAEFF;
+  --color-amber:     #F0BA5C;
+  --color-honey:     #F0BA5C;
+  --color-rose:      #FF7593;
+  --color-green:     #5AC98D;
 
-  --color-on-tint:   #17130F;   /* dark-theme tints are light, so their labels go dark */
-  --color-tint-base: #2A2219;   /* tints mix toward a raised surface, not toward white */
+  --color-on-tint:   #1E1714;
+  --color-tint-base: #33291F;
 
-  --edge:         #0D0A08;
-  --shadow-card:  4px 4px 0 var(--edge);
-  --shadow-lift:  8px 9px 0 color-mix(in srgb, var(--accent, var(--color-brand)) 28%, var(--edge));
-  --shadow-inset: inset 0 1px 0 rgba(255,255,255,.06);
+  --shadow-card:  0 1px 2px rgba(0,0,0,.34), 0 8px 22px -12px rgba(0,0,0,.6);
+  --shadow-lift:  0 2px 8px rgba(0,0,0,.4), 0 20px 40px -18px color-mix(in srgb, var(--accent, var(--color-brand)) 45%, rgba(0,0,0,.7));
+  --shadow-soft:  0 1px 3px rgba(0,0,0,.3);
+  --shadow-inset: inset 0 1px 0 rgba(255,255,255,.05);
   --sheen: rgba(255,255,255,.07);
 
-  --hero-scrim: linear-gradient(to bottom, rgba(23,19,15,.18), rgba(23,19,15,.58), var(--color-bg));
+  --hero-scrim: linear-gradient(to bottom, rgba(30,23,20,.24), rgba(30,23,20,.66), var(--color-bg));
 }
 
 /* Theme swaps repaint the whole page; without this the ground snaps and the cards lag. */
@@ -111,7 +130,7 @@ body {
   color: var(--color-body);
   font-family: var(--font-sans);
   font-size: 16px;
-  line-height: 1.6;
+  line-height: 1.65;
   min-height: 100svh;
   -webkit-font-smoothing: antialiased;
 }
@@ -119,84 +138,102 @@ body {
 
 @layer base {
   h1, h2, h3 { color: var(--color-ink); font-family: var(--font-display); letter-spacing: -.022em; }
-  h1 { font-weight: 700; line-height: 1.04; }
-  h2 { font-weight: 700; line-height: 1.1; }
-  h3 { font-weight: 600; line-height: 1.25; }
-  .display  { font: 700 clamp(38px,6.2vw,74px)/1.03 var(--font-display); letter-spacing:-.03em; color:var(--color-ink); text-wrap:balance; }
-  .title-lg { font: 700 clamp(26px,3.4vw,42px)/1.1 var(--font-display); letter-spacing:-.025em; color:var(--color-ink); text-wrap:balance; }
-  .lead     { font-size: clamp(17px,1.5vw,20px); line-height:1.55; color:var(--color-body); max-width:60ch; }
-  .kicker   { font: 600 11px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--color-muted); }
+  h1 { font-weight: 700; line-height: 1.06; }
+  h2 { font-weight: 700; line-height: 1.14; }
+  h3 { font-weight: 600; line-height: 1.3; }
+  /* A shade smaller than before. The old display size shouted across the room; this
+     one talks to someone standing in front of it. */
+  .display  { font: 700 clamp(36px,5.4vw,62px)/1.06 var(--font-display); letter-spacing:-.028em; color:var(--color-ink); text-wrap:balance; }
+  .title-lg { font: 700 clamp(25px,3.1vw,38px)/1.14 var(--font-display); letter-spacing:-.024em; color:var(--color-ink); text-wrap:balance; }
+  .lead     { font-size: clamp(17px,1.45vw,19px); line-height:1.6; color:var(--color-body); max-width:58ch; }
+  /* Sentence case, gentler tracking: the old wide monospace capitals read as a
+     control panel. This still labels a section without barking at anyone. */
+  .kicker   { font: 600 12px/1.3 var(--font-sans); letter-spacing:.04em; color:var(--color-muted); }
   .mono     { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
-  .price    { font: 700 clamp(20px,2vw,26px)/1 var(--font-display); font-variant-numeric: tabular-nums; color:var(--color-ink); letter-spacing:-.02em; }
-  :focus-visible { outline: 2px solid var(--color-brand); outline-offset: 3px; border-radius: 4px; }
+  .price    { font: 700 clamp(20px,2vw,25px)/1 var(--font-display); font-variant-numeric: tabular-nums; color:var(--color-ink); letter-spacing:-.02em; }
+  :focus-visible { outline: 2px solid var(--color-brand); outline-offset: 3px; border-radius: 6px; }
 }
 
 @layer components {
   .wrap { max-width: 1280px; margin-inline: auto; padding-inline: 20px; }
   @media (min-width: 768px) { .wrap { padding-inline: 32px; } }
 
-  /* soft white card that lifts toward the cursor's colour */
+  /* A card is a soft object resting on the paper, lifting toward the cursor. */
   .card {
     background: var(--color-surface);
     border: 1px solid var(--color-line);
-    border-radius: 18px;
+    border-radius: var(--r-card);
     box-shadow: var(--shadow-card);
     transition: transform var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out), border-color var(--dur-2) var(--ease-out);
   }
   .card-hover:hover, .card-hover:focus-visible {
-    transform: translate(-2px, -3px);
+    transform: translateY(-3px);
     box-shadow: var(--shadow-lift);
-    border-color: color-mix(in srgb, var(--accent, var(--color-brand)) 40%, var(--color-line));
+    border-color: color-mix(in srgb, var(--accent, var(--color-brand)) 34%, var(--color-line));
   }
 
-  /* the house seal behind the hero — the brand's own geometry, not a stock gradient */
+  /* the house seal behind the hero */
   .hero-seal {
     position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 0;
     display: grid; place-items: center;
   }
   .hero-seal svg {
-    width: min(126vw, 1180px); height: auto; opacity: .5;
+    width: min(126vw, 1180px); height: auto; opacity: .34;
     transform: translateY(-4%);
   }
-  :root[data-theme="dark"] .hero-seal svg { opacity: .42; }
+  :root[data-theme="dark"] .hero-seal svg { opacity: .3; }
   @keyframes seal-turn { to { transform: rotate(360deg); } }
   .hero-seal-spin { transform-origin: 300px 300px; animation: seal-turn 240s linear infinite; }
 
   /* rounded pill for categories and status */
   .pill {
     display:inline-flex; align-items:center; gap:6px; border-radius:999px;
-    padding: 4px 10px; font-size: 12px; font-weight: 600; line-height: 1.2;
-    background: color-mix(in srgb, var(--tint, var(--color-brand)) 12%, var(--color-tint-base));
-    color: color-mix(in srgb, var(--tint, var(--color-brand)) 62%, var(--color-ink));
-    border: 1px solid color-mix(in srgb, var(--tint, var(--color-brand)) 24%, var(--color-tint-base));
+    padding: 5px 11px; font-size: 12.5px; font-weight: 600; line-height: 1.25;
+    background: color-mix(in srgb, var(--tint, var(--color-brand)) 11%, var(--color-tint-base));
+    color: color-mix(in srgb, var(--tint, var(--color-brand)) 66%, var(--color-ink));
+    border: 1px solid color-mix(in srgb, var(--tint, var(--color-brand)) 20%, var(--color-tint-base));
   }
   .pill-dot { width:6px; height:6px; border-radius:999px; background: var(--tint, var(--color-brand)); }
 
-  /* buttons */
+  /* buttons — softer corners, a shadow that gathers under rather than behind */
   .btn {
     display:inline-flex; align-items:center; justify-content:center; gap:8px;
-    border-radius: 12px; padding: 12px 20px; font-weight: 600; font-size: 15px;
-    transition: transform var(--dur-1) var(--ease-soft), box-shadow var(--dur-1) var(--ease-soft), background-color var(--dur-1), color var(--dur-1);
+    border-radius: var(--r-ctl); padding: 12px 20px; font-weight: 600; font-size: 15px;
+    transition: transform var(--dur-1) var(--ease-soft), box-shadow var(--dur-1) var(--ease-soft), background-color var(--dur-1), color var(--dur-1), border-color var(--dur-1);
   }
   .btn:active { transform: translateY(1px); }
-  .btn-primary { background: var(--color-brand); color:#fff; box-shadow: 3px 3px 0 color-mix(in srgb, var(--color-brand) 34%, transparent); }
-  .btn-primary:hover { transform: translate(1.5px,1.5px); box-shadow: 1.5px 1.5px 0 color-mix(in srgb, var(--color-brand) 34%, transparent); }
-  .btn-secondary { background: var(--color-surface); color: var(--color-ink); border:1px solid var(--color-line-2); box-shadow: var(--shadow-card); }
-  .btn-secondary:hover { border-color: var(--color-brand); color: var(--color-brand); }
+  .btn-primary {
+    background: var(--color-brand); color: #fff;
+    box-shadow: 0 2px 4px color-mix(in srgb, var(--color-brand) 22%, transparent), 0 10px 22px -10px color-mix(in srgb, var(--color-brand) 58%, transparent);
+  }
+  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 3px 6px color-mix(in srgb, var(--color-brand) 26%, transparent), 0 16px 30px -12px color-mix(in srgb, var(--color-brand) 62%, transparent); }
+  .btn-secondary { background: var(--color-surface); color: var(--color-ink); border:1px solid var(--color-line-2); box-shadow: var(--shadow-soft); }
+  .btn-secondary:hover { border-color: var(--color-brand); color: var(--color-brand); box-shadow: var(--shadow-card); }
   .btn-ghost { background: transparent; color: var(--color-muted); }
   .btn-ghost:hover { background: var(--color-bg-2); color: var(--color-ink); }
-  .btn-danger { background: var(--color-surface); color: var(--color-rose); border:1px solid color-mix(in srgb, var(--color-rose) 35%, var(--color-tint-base)); }
+  .btn-danger { background: var(--color-surface); color: var(--color-rose); border:1px solid color-mix(in srgb, var(--color-rose) 32%, var(--color-tint-base)); }
   .btn-danger:hover { background: color-mix(in srgb, var(--color-rose) 8%, var(--color-tint-base)); }
 
-  /* inputs */
+  /* inputs — a gentle well, and a soft halo on focus instead of a hard bar */
   .input {
-    width:100%; border-radius:12px; border:1px solid var(--color-line-2);
-    background: var(--color-surface); padding: 11px 14px; font-size: 15px; color: var(--color-ink);
+    width:100%; border-radius: var(--r-ctl); border:1px solid var(--color-line-2);
+    background: var(--color-surface); padding: 12px 14px; font-size: 15px; color: var(--color-ink);
+    box-shadow: var(--shadow-soft);
     transition: border-color var(--dur-1), box-shadow var(--dur-1);
   }
   .input::placeholder { color: var(--color-faint); }
-  .input { box-shadow: 3px 3px 0 var(--edge); }
-  .input:focus { outline:none; border-color: var(--color-brand); box-shadow: 3px 3px 0 color-mix(in srgb, var(--color-brand) 24%, transparent); }
+  .input:focus {
+    outline:none; border-color: var(--color-brand);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-brand) 15%, transparent);
+  }
+
+  /* A quiet panel for asides, welcomes and empty states: warmth without a card's weight. */
+  .note {
+    border-radius: var(--r-card);
+    border: 1px solid color-mix(in srgb, var(--tint, var(--color-honey)) 22%, var(--color-line));
+    background: color-mix(in srgb, var(--tint, var(--color-honey)) 8%, var(--color-tint-base));
+    padding: 18px 20px;
+  }
 
   /* scroll reveal */
   [data-reveal] > * {
@@ -212,7 +249,6 @@ body {
   .tape-track { display:flex; width:max-content; animation: tape var(--speed,40s) linear infinite; }
   .tape:hover .tape-track { animation-play-state: paused; }
 
-  /* the logo shell refilling on hover — clip-path only, so it stays on the compositor */
   .logo-fill svg { transition: filter var(--dur-2) var(--ease-out); }
   .group:hover .logo-fill svg { filter: saturate(1.25); }
   .logo-fill { display: inline-flex; }
@@ -225,7 +261,7 @@ body {
 
   /* skeleton */
   @keyframes sweep { to { transform: translate3d(220%,0,0); } }
-  .skeleton { position:relative; overflow:hidden; background: var(--color-bg-2); border-radius:12px; }
+  .skeleton { position:relative; overflow:hidden; background: var(--color-bg-2); border-radius: var(--r-ctl); }
   .skeleton::after { content:""; position:absolute; inset:0; transform: translate3d(-120%,0,0);
     background: linear-gradient(90deg, transparent, var(--sheen), transparent);
     animation: sweep 1900ms var(--ease-soft) infinite; }
@@ -246,10 +282,10 @@ body {
 /* wallet adapter */
 .wallet-adapter-button-trigger {
   background: var(--color-brand) !important; color:#fff !important;
-  border-radius: 12px !important; height: 42px !important; font-size: 14px !important;
+  border-radius: var(--r-ctl) !important; height: 42px !important; font-size: 14px !important;
   font-weight: 600 !important; font-family: var(--font-sans) !important;
 }
-.wallet-adapter-modal-wrapper { background: var(--color-surface) !important; border-radius: 20px !important; }
+.wallet-adapter-modal-wrapper { background: var(--color-surface) !important; border-radius: var(--r-card) !important; }
 .wallet-adapter-modal-title { color: var(--color-ink) !important; }
 /* the adapter hard-codes a light list; give it the themed surface in both directions */
 .wallet-adapter-modal-list li button { background: var(--color-bg-2) !important; color: var(--color-ink) !important; }
