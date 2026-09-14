@@ -51,16 +51,26 @@ export const NETWORK = (env("SOLANA_NETWORK") ?? "devnet") as AppConfig["network
 /** Server-side RPC. May carry an API key; never sent to the browser. */
 export const RPC_URL = httpOr(env("RPC_URL") ?? env("NEXT_PUBLIC_RPC_URL"), `https://api.${NETWORK}.solana.com`);
 /**
+ * Solana Labs' own public endpoints. Fine from a server, useless from a web page: they
+ * are documented as not for production applications, and they answer browser traffic
+ * with `403 Access forbidden`. Recognised by name so that configuring one for the
+ * browser — which the deployment did — cannot quietly take every on-chain action out.
+ */
+const PUBLIC_SOLANA_RPC = /^https?:\/\/api\.(mainnet-beta|devnet|testnet)\.solana\.com\/?$/i;
+
+/**
  * Endpoint handed to wallets in the browser. Keep this one keyless / CORS-open.
  *
- * The default is this site's own `/api/rpc`, which forwards to `RPC_URL` above. The
- * public `api.<network>.solana.com` used to be the fallback and cannot be: it is not for
- * production applications and answers a web page with `403 Access forbidden`, which took
- * out every on-chain action. Relative on purpose — the browser resolves it against
- * whatever origin it is on, so a preview deploy and a laptop both reach their own server
- * rather than production's. See `resolveRpcUrl` for where that happens.
+ * Defaults to this site's own `/api/rpc`, which forwards to `RPC_URL` above, and falls
+ * back to it as well when the configured endpoint is one of the public ones that refuse
+ * browsers. Relative on purpose — the browser resolves it against whatever origin it is
+ * on, so a preview deploy and a laptop each reach their own server rather than
+ * production's. See `resolveRpcUrl` for where that happens.
  */
-export const BROWSER_RPC_URL = httpOr(env("NEXT_PUBLIC_RPC_URL"), "/api/rpc");
+const browserRaw = env("NEXT_PUBLIC_RPC_URL");
+export const BROWSER_RPC_URL = browserRaw && PUBLIC_SOLANA_RPC.test(browserRaw.trim())
+  ? "/api/rpc"
+  : httpOr(browserRaw, "/api/rpc");
 /** Fallback only. The program's own config is authoritative — see `chainConfig()`. */
 const feeRaw = Number(env("FEE_BPS") ?? 500);
 export const FEE_BPS = Number.isFinite(feeRaw) && feeRaw >= 0 ? feeRaw : 500; // 5%, the program's hard ceiling
