@@ -142,6 +142,21 @@ export interface TokenInfo {
   } | null;
 }
 
+/**
+ * What `GET /api/token/:mint` answers with. The mint's chain state is nested under
+ * `token`, alongside what this site knows about it — so a caller that wants the token
+ * has to reach in and take it. Mistaking this envelope for the `TokenInfo` inside it
+ * reads every token field as undefined, which looks exactly like a token whose data
+ * could not be read rather than like a bug.
+ */
+export interface TokenDossier {
+  mint: string;
+  token: TokenInfo | null;
+  wanted: WantedEntry[];
+  listings: Listing[];
+  forSale: Listing | null;
+}
+
 export interface BuilderProfile {
   wallet: string;
   name: string;

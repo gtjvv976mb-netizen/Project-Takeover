@@ -4,18 +4,10 @@ import Link from "next/link";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { signedPost } from "@/lib/client/api";
 import { acceptOfferOnChain, cancelOfferOnChain, makeOfferOnChain } from "@/lib/client/program";
-import { formatSol, shortKey, type AuthorityKind, type Listing, type TokenInfo, type WantedEntry } from "@/lib/types";
+import { formatSol, shortKey, type AuthorityKind, type TokenDossier } from "@/lib/types";
 import { Alert, Button, Chip, Field, inputCls, ListingCard, Sigil } from "@/components/ui";
 import { CoverArt } from "@/components/CoverArt";
 import { explorerUrl, useConfig } from "@/components/ConfigContext";
-
-type Dossier = {
-  mint: string;
-  token: TokenInfo | null;
-  wanted: WantedEntry[];
-  listings: Listing[];
-  forSale: Listing | null;
-};
 
 /** One fact read from the chain, with a plain-language reading of what it means. */
 function Fact({ label, value, tone }: { label: string; value: React.ReactNode; tone?: "good" | "warn" }) {
@@ -45,7 +37,7 @@ export default function TokenPage({ params }: { params: Promise<{ mint: string }
   const cfg = useConfig();
   const me = wallet.publicKey?.toBase58();
 
-  const [d, setD] = useState<Dossier | null>(null);
+  const [d, setD] = useState<TokenDossier | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");

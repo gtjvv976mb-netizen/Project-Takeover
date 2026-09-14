@@ -2,6 +2,7 @@ import { PublicKey } from "@solana/web3.js";
 import { cacheToken, getCachedToken, isTokenCacheFresh, listListings, wantedFor } from "@/lib/db";
 import { handleError, json } from "@/lib/api-utils";
 import { fetchTokenInfo } from "@/lib/solana";
+import type { TokenDossier } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -23,13 +24,15 @@ export async function GET(req: Request, ctx: { params: Promise<{ mint: string }>
     }
 
     const listings = listListings({ status: "all" }).filter((l) => l.mint === mint);
-    return json({
+    // Typed, so the shape clients decode against is checked here rather than assumed there.
+    const dossier: TokenDossier = {
       mint,
       token,
       wanted: wantedFor(mint),
       listings: listings.filter((l) => l.status !== "draft"),
       forSale: listings.find((l) => l.status === "active") ?? null,
-    });
+    };
+    return json(dossier);
   } catch (e) {
     return handleError(e);
   }

@@ -2,7 +2,7 @@
 import bs58 from "bs58";
 import type { WalletContextState } from "@solana/wallet-adapter-react";
 import { buildAuthMessage } from "@/lib/auth";
-import type { AppConfig, Listing, ListingEvent, PumpControl, PumpControlVerdict, SignedRequest, TokenInfo } from "@/lib/types";
+import type { AppConfig, Listing, ListingEvent, PumpControl, PumpControlVerdict, SignedRequest, TokenDossier } from "@/lib/types";
 
 /** What /api/listings/:id/verify-domain answers for an off-chain listing. */
 export type DomainProofResult = {
@@ -44,7 +44,7 @@ export async function signedPost<T = Listing>(wallet: WalletContextState, url: s
 
 export const api = {
   config: () => fetch("/api/config").then((r) => parse<AppConfig>(r)),
-  token: (mint: string) => fetch(`/api/token/${mint}`).then((r) => parse<TokenInfo>(r)),
+  token: (mint: string) => fetch(`/api/token/${mint}`).then((r) => parse<TokenDossier>(r)),
   listings: (q: Record<string, string> = {}) => fetch(`/api/listings?${new URLSearchParams(q)}`).then((r) => parse<Listing[]>(r)),
   listing: (id: string) => fetch(`/api/listings/${id}`).then((r) => parse<{ listing: Listing; events: ListingEvent[] }>(r)),
   handover: (id: string) => fetch(`/api/listings/${id}/handover`).then((r) => parse<Handover>(r)),
