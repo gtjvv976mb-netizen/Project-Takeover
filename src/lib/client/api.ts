@@ -56,6 +56,20 @@ export async function uploadListingImage(wallet: WalletContextState, listingId: 
   return parse<{ image: string; url: string; bytes: number }>(res);
 }
 
+/**
+ * A cover uploaded before its listing exists. The sell form needs the picture in hand at
+ * the moment it creates the listing — the creation request carries the stored name — so
+ * this stages the bytes and hands back that name.
+ */
+export async function uploadStagedImage(wallet: WalletContextState, file: File) {
+  const auth = await signAuth(wallet, "upload", null);
+  const form = new FormData();
+  form.append("auth", JSON.stringify(auth));
+  form.append("file", file);
+  const res = await fetch("/api/uploads", { method: "POST", body: form });
+  return parse<{ image: string; url: string; bytes: number }>(res);
+}
+
 export async function removeListingImage(wallet: WalletContextState, listingId: string) {
   const auth = await signAuth(wallet, "image", listingId);
   const res = await fetch(`/api/listings/${listingId}/image`, {

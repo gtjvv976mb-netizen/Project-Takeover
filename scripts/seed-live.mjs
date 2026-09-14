@@ -21,6 +21,7 @@ import { Connection, Keypair, LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transa
 import { createInitializeMintInstruction, getMint, MINT_SIZE, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import nacl from "tweetnacl";
 import bs58 from "bs58";
+import { stageCover } from "./cover.mjs";
 
 const BASE = process.argv[2] ?? "http://localhost:3000";
 const RPC = process.env.RPC_URL ?? "https://api.devnet.solana.com";
@@ -147,6 +148,7 @@ for (const spec of TOKENS) {
   const row = await post("/api/listings", seller, "create", null, {
     type: "token_authority", title: spec.title, description: spec.desc, priceSol: spec.sol,
     asset: { mint: mint.publicKey.toBase58(), authorities: spec.auth },
+    image: await stageCover(BASE, seller, spec.title),
   });
 
   const sp = progFor(seller);
@@ -176,6 +178,7 @@ for (const spec of PROJECTS) {
   const row = await post("/api/listings", seller, "create", null, {
     type: "offchain", title: spec.title, description: spec.desc, priceSol: spec.sol,
     asset: { category: "project", links: spec.links, deliverables: spec.deliverables },
+    image: await stageCover(BASE, seller, spec.title),
   });
   const sp = progFor(seller);
   await retry("createListing", () => sp.methods.createListing(idBytes(row.id), { offchain: {} }, new BN(price), 0, 30)

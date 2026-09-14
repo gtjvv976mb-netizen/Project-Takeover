@@ -2,10 +2,12 @@
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
-import { api, signedPost } from "@/lib/client/api";
+import { api, signedPost, uploadStagedImage } from "@/lib/client/api";
 import { createListingOnChain, escrowAuthorityOnChain } from "@/lib/client/program";
 import { useConfig } from "@/components/ConfigContext";
 import { Alert, Button, Field, inputCls, TokenAvatar } from "@/components/ui";
+import { CoverPicker } from "@/components/CoverPicker";
+import { MAX_UPLOAD_BYTES } from "@/lib/uploads-shared";
 import { OFFCHAIN_CATEGORY_LABELS, shortKey, TYPE_LABELS, type AuthorityKind, type Listing, type ListingType, type OffchainAsset, type TokenInfo } from "@/lib/types";
 import { pumpControlOf } from "@/lib/solana-shared";
 
@@ -53,6 +55,37 @@ function Sell() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<Listing | null>(null);
+  /**
+   * The cover, staged before the listing exists. Listings used to go up with nothing but
+   * generated artwork on them, which told a buyer nothing and made the market look empty;
+   * a picture is now required, and the server checks that too.
+   */
+  const [image, setImage] = useState<string | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+
+  async function pickImage(file: File) {
+    setError(null);
+    if (file.size > MAX_UPLOAD_BYTES) {
+      setError(`That image is ${(file.size / 1024 / 1024).toFixed(1)} MB. The limit is 2 MB.`);
+      return;
+    }
+    // Show it straight away from the local file; the upload only decides whether it sticks.
+    const local = URL.createObjectURL(file);
+    setPreview(local);
+    setBusy("Uploading the cover…");
+    try {
+      const up = await uploadStagedImage(wallet, file);
+      setImage(up.image);
+      setPreview(up.url);
+    } catch (e) {
+      setImage(null);
+      setPreview(null);
+      setError((e as Error).message);
+    } finally {
+      URL.revokeObjectURL(local);
+      setBusy(null);
+    }
+  }
 
   async function lookup() {
     setError(null); setToken(null); setBusy("Looking up token…");
@@ -76,7 +109,7 @@ function Sell() {
       const asset = type === "offchain"
         ? { category, links: links.split(/\s+/).filter(Boolean), deliverables }
         : type === "pump_creator" ? { mint: mint.trim() } : { mint: mint.trim(), authorities };
-      const l = await signedPost(wallet, "/api/listings", "create", null, { type, title, description, priceSol: Number(priceSol), asset, requestId: forRequest ?? undefined });
+      const l = await signedPost(wallet, "/api/listings", "create", null, { type, title, description, priceSol: Number(priceSol), asset, image, requestId: forRequest ?? undefined });
       setCreated(l);
       if (l.status === "active") router.push(`/listings/${l.id}`);
     } catch (e) { setError((e as Error).message); } finally { setBusy(null); }
@@ -146,7 +179,7 @@ function Sell() {
     );
   }
 
-  const canSubmit = title && Number(priceSol) >= 0.01 && (type === "offchain" ? deliverables : token && (type === "pump_creator" ? pumpControlOf(token.pump?.control, me ?? "").full : authorities.length > 0 && token.extensions?.program !== "token-2022"));
+  const canSubmit = title && image && Number(priceSol) >= 0.01 && (type === "offchain" ? deliverables : token && (type === "pump_creator" ? pumpControlOf(token.pump?.control, me ?? "").full : authorities.length > 0 && token.extensions?.program !== "token-2022"));
 
   return (
     <div className="wrap py-10 max-w-3xl space-y-6">
@@ -235,6 +268,11 @@ function Sell() {
         </>
       )}
 
+      <Field label="Cover image" hint="Required. This is the picture on your card in the market and at the top of your listing — it is the whole of what somebody sees before they decide to click. Wide images look best; it is cropped to a letterbox.">
+        <CoverPicker preview={preview} busy={busy === "Uploading the cover…"} onPick={pickImage}
+          onClear={() => { setImage(null); setPreview(null); }} />
+      </Field>
+
       <Field label="Title"><input className={inputCls} value={title} onChange={(e) => setTitle(e.target.value)} maxLength={80} /></Field>
       <Field label="Description" hint="Buyers pay for proof: link the repo, the deployed site, the community, the numbers."><textarea className={inputCls} rows={5} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What you built, what works today, holders / volume / community size, and why you're handing it over…" /></Field>
       {type !== "token_authority" && (
@@ -249,6 +287,13 @@ function Sell() {
       </Field>
 
       {error && <Alert kind="error">{error}</Alert>}
+      {/* A disabled button with no reason beside it is the most common way a form loses
+          somebody. Name the one thing that is missing. */}
+      {!canSubmit && !busy && (
+        <p className="text-[13px] text-faint">
+          {!image ? "Add a cover image to continue." : !title ? "Give the listing a title." : Number(priceSol) < 0.01 ? "Set a price of at least 0.01 SOL." : "Fill in what the buyer receives."}
+        </p>
+      )}
       <Button onClick={create} disabled={!canSubmit || !!busy}>{busy ?? (type === "token_authority" ? "Continue to escrow" : "Publish listing")}</Button>
     </div>
   );

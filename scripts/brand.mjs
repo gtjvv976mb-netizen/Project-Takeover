@@ -92,8 +92,8 @@ body{${dark ? darkGround : lightGround}display:flex;flex-direction:column;align-
 .dot{width:10px;height:10px;border-radius:99px;background:${TEAL};box-shadow:0 0 0 6px ${TEAL}22}
 </style></head><body>
   ${mark({ size: 190, glow: dark })}
-  <div class="name">Don&rsquo;t let it die.<br><b>Hand it over.</b></div>
-  <div class="tag">Hand over a Solana project to whoever runs it next.</div>
+  <div class="name">Nobody trusts anybody.<br><b>Everybody gets paid.</b></div>
+  <div class="tag">Sell what you shipped. Commission what you need. On Solana.</div>
   <div class="foot"><span class="dot"></span>project-takeover.com</div>
 </body></html>`;
 
@@ -111,8 +111,8 @@ body{${dark ? darkGround : lightGround}display:flex;align-items:center;gap:46px;
   ${mark({ size: 296, glow: dark })}
   <div>
     <div class="name">Project: <b>Takeover</b></div>
-    <div class="tag">Don&rsquo;t let it die. <b>Hand it over.</b></div>
-    <div class="foot"><span class="dot"></span>The money and the keys change hands together &nbsp;·&nbsp; project-takeover.com</div>
+    <div class="tag">Nobody trusts anybody. <b>Everybody gets paid.</b></div>
+    <div class="foot"><span class="dot"></span>Escrow holds the money until the work lands &nbsp;·&nbsp; project-takeover.com</div>
   </div>
 </body></html>`;
 

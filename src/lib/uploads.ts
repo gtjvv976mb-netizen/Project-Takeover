@@ -26,7 +26,8 @@ import path from "node:path";
  * project into the server bundle, which bloats every deploy.
  */
 
-export const MAX_UPLOAD_BYTES = 2 * 1024 * 1024; // 2 MB
+export { ACCEPTED_LABEL, MAX_UPLOAD_BYTES } from "./uploads-shared";
+import { ACCEPTED_LABEL, MAX_UPLOAD_BYTES } from "./uploads-shared";
 
 /** Magic numbers, checked against the head of the file. Order matters only for speed. */
 const SIGNATURES: { ext: string; mime: string; match: (b: Buffer) => boolean }[] = [
@@ -47,8 +48,6 @@ const SIGNATURES: { ext: string; mime: string; match: (b: Buffer) => boolean }[]
     match: (b) => b.length > 6 && ["GIF87a", "GIF89a"].includes(b.subarray(0, 6).toString("latin1")),
   },
 ];
-
-export const ACCEPTED_LABEL = "PNG, JPEG, WebP or GIF";
 
 /** The format these bytes actually are, or null if they are not a picture we serve. */
 export function sniffImage(bytes: Buffer): { ext: string; mime: string } | null {
@@ -116,6 +115,40 @@ export function saveImage(bytes: Buffer): SaveResult {
     fs.renameSync(/*turbopackIgnore: true*/ tmp, full);
   }
   return { ok: true, name, mime: kind.mime, bytes: bytes.length };
+}
+
+/** Whether a stored name names a file that is actually on the disk. */
+export function imageExists(name: string): boolean {
+  const full = storedPath(name);
+  return !!full && fs.existsSync(/*turbopackIgnore: true*/ full);
+}
+
+/**
+ * Delete uploaded files nothing points at.
+ *
+ * A cover is uploaded before the listing that will carry it exists, so an abandoned form
+ * leaves bytes on the disk with no row referring to them. `referenced` is every name the
+ * database still uses; anything else that is older than the grace period is swept. The
+ * grace matters: a file uploaded seconds ago is unreferenced precisely because the seller
+ * is still filling in the form it belongs to.
+ */
+export function sweepOrphans(referenced: Set<string>, graceMs = 24 * 60 * 60 * 1000): number {
+  const dir = uploadDir();
+  let removed = 0;
+  let names: string[];
+  try { names = fs.readdirSync(/*turbopackIgnore: true*/ dir); } catch { return 0; }
+  const cutoff = Date.now() - graceMs;
+  for (const name of names) {
+    if (!isStoredName(name) || referenced.has(name)) continue;
+    const full = storedPath(name);
+    if (!full) continue;
+    try {
+      if (fs.statSync(/*turbopackIgnore: true*/ full).mtimeMs > cutoff) continue;
+      fs.unlinkSync(/*turbopackIgnore: true*/ full);
+      removed++;
+    } catch { /* raced with another sweep, or already gone */ }
+  }
+  return removed;
 }
 
 /** Remove a stored file. Missing is success — the caller wanted it gone. */
