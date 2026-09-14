@@ -1,4 +1,5 @@
 "use client";
+import { useState } from "react";
 import Link from "next/link";
 import { formatSol, shortKey, STATUS_LABELS, TYPE_LABELS, type Listing, type ListingStatus, type ListingType , type OffchainAsset } from "@/lib/types";
 import { CoverArt } from "./CoverArt";
@@ -69,9 +70,12 @@ export function Sigil({ wallet, size = 32 }: { wallet: string; size?: number }) 
 }
 
 export function TokenAvatar({ image, symbol, size = 44 }: { image?: string | null; symbol?: string | null; size?: number }) {
-  return image ? (
+  // Token artwork lives on whatever gateway the coin's metadata names, and public IPFS
+  // gateways rate-limit. Fall back to the ticker rather than showing a broken image.
+  const [failed, setFailed] = useState<string | null>(null);
+  return image && failed !== image ? (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={image} alt={symbol ?? ""} width={size} height={size}
+    <img src={image} alt={symbol ?? ""} width={size} height={size} onError={() => setFailed(image)}
       className="rounded-xl border border-line object-cover" style={{ width: size, height: size }} />
   ) : (
     <span className="grid shrink-0 place-items-center rounded-xl border border-line bg-bg-2 text-[12px] font-bold uppercase text-muted"
