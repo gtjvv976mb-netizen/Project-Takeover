@@ -8,6 +8,8 @@ import { explorerUrl, useConfig } from "@/components/ConfigContext";
 import { Alert, Button, Chip, inputCls, StatusBadge, TypeBadge } from "@/components/ui";
 import { CoverArt } from "@/components/CoverArt";
 import { CoverPicker } from "@/components/CoverPicker";
+import { prepareImage } from "@/lib/client/image";
+import { ACCEPT_ATTR } from "@/lib/uploads-shared";
 import { formatSol, OFFCHAIN_CATEGORY_LABELS, shortKey, type Listing, type ListingEvent, type OffchainAsset, type PumpCreatorAsset, type Review, type TokenAuthorityAsset } from "@/lib/types";
 import { BuilderChip } from "@/components/Builder";
 
@@ -122,6 +124,9 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
   const [myReview, setMyReview] = useState<Review | null>(null);
   const [rating, setRating] = useState(0);
   const [reviewBody, setReviewBody] = useState("");
+  /** Kept apart from `error`, which lives in the sidebar: a cover problem belongs at the cover. */
+  const [coverError, setCoverError] = useState<string | null>(null);
+  const [coverNote, setCoverNote] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     const r = await api.listing(id);
@@ -207,6 +212,25 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
   const saveNote = () => run("Saving…", () =>
     signedPost(wallet, `/api/listings/${l.id}/note`, "note", l.id, { note }));
 
+  /**
+   * Put a picture on the listing. Shrunk in the browser first, so a photo straight off a
+   * phone goes up instead of coming back as a size complaint the seller never sees.
+   */
+  async function setCover(file: File) {
+    setCoverError(null); setCoverNote(null); setError(null); setNotice(null);
+    setBusy("Uploading the cover…");
+    try {
+      const { file: ready, note: how } = await prepareImage(file);
+      await uploadListingImage(wallet, l!.id, ready);
+      setCoverNote(how);
+      await reload();
+    } catch (e) {
+      setCoverError((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
   const secondsLeft = deadline === null ? null : deadline - nowSec;
   const pastDeadline = secondsLeft !== null && secondsLeft <= 0;
   // A review needs a finished deal and a counterparty. Cancelled listings had neither.
@@ -282,7 +306,9 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
         <CoverPicker
           preview={null}
           busy={busy === "Uploading the cover…"}
-          onPick={(file) => run("Uploading the cover…", () => uploadListingImage(wallet, l.id, file))}
+          error={coverError}
+          note={coverNote}
+          onPick={(file) => setCover(file)}
         />
       ) : (
         <div className="relative">
@@ -294,14 +320,17 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
             <label className="absolute bottom-3 right-3 cursor-pointer rounded-full px-3.5 py-2 text-[13px] font-semibold backdrop-blur"
               style={{ background: "color-mix(in srgb, var(--color-bg) 78%, transparent)", color: "var(--color-ink)", border: "1px solid var(--color-line)" }}>
               {busy === "Uploading the cover…" ? "Uploading…" : "Change cover"}
-              <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" disabled={!!busy}
+              <input type="file" accept={ACCEPT_ATTR} className="hidden" disabled={!!busy}
                 onChange={(e) => {
                   const file = e.target.files?.[0];
                   e.target.value = "";
-                  if (file) run("Uploading the cover…", () => uploadListingImage(wallet, l.id, file));
+                  if (file) setCover(file);
                 }} />
             </label>
           )}
+          {/* The picker carries its own message; this branch has none, so it needs one. */}
+          {coverError && <p className="mt-2 text-[13px] font-semibold" style={{ color: "var(--color-rose)" }} role="alert">{coverError}</p>}
+          {!coverError && coverNote && <p className="mt-2 text-[13px] text-faint">{coverNote}</p>}
         </div>
       )}
 

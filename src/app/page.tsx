@@ -43,10 +43,10 @@ function Hero({ live, settled, builders, onSearch, query }: {
           )}
 
           <h1 className="display mt-6">
-            Nobody trusts anybody.{" "}
+            You dream it.{" "}
             <span className="whitespace-nowrap">
               <span style={{ background: "linear-gradient(96deg, var(--color-brand), var(--color-teal))", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>
-                Everybody gets paid.
+                Devs build it.
               </span>
             </span>
           </h1>
