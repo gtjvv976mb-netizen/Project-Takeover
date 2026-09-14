@@ -1,6 +1,6 @@
 import path from "node:path";
 import fs from "node:fs";
-import type { BuilderProfile, BuilderStats, Listing, ListingEvent, ListingReport, ListingStatus, TokenInfo, WantedEntry, WantedRow } from "./types";
+import type { BuildRequest, BuilderProfile, BuilderStats, Listing, ListingEvent, ListingReport, ListingStatus, Proposal, TokenInfo, WantedEntry, WantedRow } from "./types";
 
 // node:sqlite is a Node 22.13+/24 built-in. We resolve it through
 // process.getBuiltinModule so the Next.js bundler leaves it alone.
@@ -90,6 +90,38 @@ function open() {
       listing_id TEXT,
       created_at INTEGER NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS requests (
+      id TEXT PRIMARY KEY,
+      poster TEXT NOT NULL,
+      title TEXT NOT NULL,
+      brief TEXT NOT NULL,
+      category TEXT NOT NULL,
+      budget_lamports INTEGER NOT NULL,
+      delivery_days INTEGER NOT NULL,
+      status TEXT NOT NULL,
+      awarded_dev TEXT,
+      listing_id TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_requests_status ON requests(status);
+    CREATE INDEX IF NOT EXISTS idx_requests_poster ON requests(poster);
+    CREATE TABLE IF NOT EXISTS proposals (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      request_id TEXT NOT NULL,
+      dev TEXT NOT NULL,
+      pitch TEXT NOT NULL,
+      price_lamports INTEGER NOT NULL,
+      delivery_days INTEGER NOT NULL,
+      status TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      -- One live proposal per developer per request: a second is an edit of the first,
+      -- not a second bid, so nobody can flood a request with variations of themselves.
+      UNIQUE (request_id, dev)
+    );
+    CREATE INDEX IF NOT EXISTS idx_proposals_request ON proposals(request_id);
+    CREATE INDEX IF NOT EXISTS idx_proposals_dev ON proposals(dev);
   `);
   addColumns(db, "listings", { image: "TEXT" });
   return db;
@@ -361,4 +393,132 @@ export function cacheToken(mint: string, token: TokenInfo) {
 export function isTokenCacheFresh(mint: string, maxAgeMs = 10 * 60_000): boolean {
   const r = db().prepare(`SELECT fetched_at FROM token_cache WHERE mint = ?`).get(mint) as Row | undefined;
   return !!r && Date.now() - Number(r.fetched_at) <= maxAgeMs;
+}
+
+/* ---------------------------------------------------------------- commissions */
+
+function rowToRequest(r: Row): BuildRequest {
+  return {
+    id: r.id as string,
+    poster: r.poster as string,
+    title: r.title as string,
+    brief: r.brief as string,
+    category: r.category as BuildRequest["category"],
+    budgetLamports: Number(r.budget_lamports),
+    deliveryDays: Number(r.delivery_days),
+    status: r.status as BuildRequest["status"],
+    awardedDev: (r.awarded_dev as string) ?? null,
+    listingId: (r.listing_id as string) ?? null,
+    proposalCount: Number(r.proposal_count ?? 0),
+    createdAt: Number(r.created_at),
+    updatedAt: Number(r.updated_at),
+  };
+}
+
+function rowToProposal(r: Row): Proposal {
+  return {
+    id: Number(r.id),
+    requestId: r.request_id as string,
+    dev: r.dev as string,
+    pitch: r.pitch as string,
+    priceLamports: Number(r.price_lamports),
+    deliveryDays: Number(r.delivery_days),
+    status: r.status as Proposal["status"],
+    createdAt: Number(r.created_at),
+    updatedAt: Number(r.updated_at),
+  };
+}
+
+/** Every read counts live proposals alongside the request, so a list never N+1s. */
+const REQUEST_SELECT = `
+  SELECT r.*, (
+    SELECT COUNT(*) FROM proposals p WHERE p.request_id = r.id AND p.status != 'withdrawn'
+  ) AS proposal_count
+  FROM requests r`;
+
+export function insertRequest(r: Omit<BuildRequest, "proposalCount">) {
+  db().prepare(`INSERT INTO requests
+      (id,poster,title,brief,category,budget_lamports,delivery_days,status,awarded_dev,listing_id,created_at,updated_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .run(r.id, r.poster, r.title, r.brief, r.category, r.budgetLamports, r.deliveryDays,
+      r.status, r.awardedDev, r.listingId, r.createdAt, r.updatedAt);
+}
+
+export function getRequest(id: string): BuildRequest | null {
+  const r = db().prepare(`${REQUEST_SELECT} WHERE r.id = ?`).get(id) as Row | undefined;
+  return r ? rowToRequest(r) : null;
+}
+
+export function listRequests(opts: { status?: BuildRequest["status"] | "all"; category?: string; poster?: string; dev?: string } = {}): BuildRequest[] {
+  const where: string[] = [];
+  const params: (string | number)[] = [];
+  if (opts.status && opts.status !== "all") { where.push("r.status = ?"); params.push(opts.status); }
+  if (opts.category) { where.push("r.category = ?"); params.push(opts.category); }
+  if (opts.poster) { where.push("r.poster = ?"); params.push(opts.poster); }
+  // "requests I have bid on" — the other half of a developer's dashboard.
+  if (opts.dev) { where.push("EXISTS (SELECT 1 FROM proposals p WHERE p.request_id = r.id AND p.dev = ? AND p.status != 'withdrawn')"); params.push(opts.dev); }
+  const sql = `${REQUEST_SELECT} ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY r.created_at DESC LIMIT 200`;
+  return (db().prepare(sql).all(...params) as Row[]).map(rowToRequest);
+}
+
+export function updateRequest(id: string, patch: Partial<Pick<BuildRequest, "status" | "awardedDev" | "listingId">>) {
+  const map: Record<string, string> = { status: "status", awardedDev: "awarded_dev", listingId: "listing_id" };
+  const sets: string[] = [];
+  const params: (string | number | null)[] = [];
+  for (const [k, col] of Object.entries(map)) {
+    if (k in patch) { sets.push(`${col} = ?`); params.push((patch as Record<string, string | null>)[k] ?? null); }
+  }
+  if (!sets.length) return;
+  sets.push("updated_at = ?"); params.push(Date.now());
+  params.push(id);
+  db().prepare(`UPDATE requests SET ${sets.join(", ")} WHERE id = ?`).run(...params);
+}
+
+export function listProposals(requestId: string): Proposal[] {
+  return (db().prepare(
+    `SELECT * FROM proposals WHERE request_id = ? AND status != 'withdrawn' ORDER BY created_at ASC`,
+  ).all(requestId) as Row[]).map(rowToProposal);
+}
+
+export function getProposal(id: number): Proposal | null {
+  const r = db().prepare(`SELECT * FROM proposals WHERE id = ?`).get(id) as Row | undefined;
+  return r ? rowToProposal(r) : null;
+}
+
+/**
+ * Place or replace a developer's proposal. The UNIQUE (request_id, dev) constraint makes
+ * a second one an edit rather than a second bid, and re-opens a withdrawn one.
+ */
+export function upsertProposal(p: Omit<Proposal, "id" | "createdAt" | "updatedAt">): Proposal {
+  const now = Date.now();
+  db().prepare(`INSERT INTO proposals (request_id,dev,pitch,price_lamports,delivery_days,status,created_at,updated_at)
+      VALUES (?,?,?,?,?,?,?,?)
+    ON CONFLICT(request_id, dev) DO UPDATE SET
+      pitch=excluded.pitch, price_lamports=excluded.price_lamports,
+      delivery_days=excluded.delivery_days, status=excluded.status, updated_at=excluded.updated_at`)
+    .run(p.requestId, p.dev, p.pitch, p.priceLamports, p.deliveryDays, p.status, now, now);
+  const r = db().prepare(`SELECT * FROM proposals WHERE request_id = ? AND dev = ?`).get(p.requestId, p.dev) as Row;
+  return rowToProposal(r);
+}
+
+export function setProposalStatus(id: number, status: Proposal["status"]) {
+  db().prepare(`UPDATE proposals SET status = ?, updated_at = ? WHERE id = ?`).run(status, Date.now(), id);
+}
+
+/**
+ * Accept one proposal and award the request to its developer, in one transaction so a
+ * request can never be left awarded to a proposal that is not itself accepted.
+ */
+export function awardRequest(requestId: string, proposalId: number, dev: string) {
+  const d = db();
+  d.exec("BEGIN IMMEDIATE");
+  try {
+    d.prepare(`UPDATE proposals SET status = 'accepted', updated_at = ? WHERE id = ?`).run(Date.now(), proposalId);
+    d.prepare(`UPDATE requests SET status = 'awarded', awarded_dev = ?, updated_at = ? WHERE id = ?`)
+      .run(dev, Date.now(), requestId);
+    d.exec("COMMIT");
+  } catch (e) {
+    d.exec("ROLLBACK");
+    throw e;
+  }
 }

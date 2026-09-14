@@ -1,6 +1,6 @@
 "use client";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { api, signedPost } from "@/lib/client/api";
 import { createListingOnChain, escrowAuthorityOnChain } from "@/lib/client/program";
@@ -11,20 +11,36 @@ import { pumpControlOf } from "@/lib/solana-shared";
 
 const AUTH_LABELS: Record<AuthorityKind, string> = { mint: "Mint authority (can mint new supply)", freeze: "Freeze authority (can freeze token accounts)", metadata_update: "Metadata update authority (name, symbol, image)" };
 
-export default function Sell() {
+/**
+ * Wrapped because `useSearchParams` suspends: an awarded developer arrives here from a
+ * request with the agreed price and deadline already in the URL, so the form is filled
+ * in for them rather than retyped from memory.
+ */
+export default function SellPage() {
+  return (
+    <Suspense fallback={<p className="wrap py-10 text-muted">Loading…</p>}>
+      <Sell />
+    </Suspense>
+  );
+}
+
+function Sell() {
   const wallet = useWallet();
+  const params = useSearchParams();
+  /** Set when this listing is the escrow for a commission that was awarded to them. */
+  const forRequest = params.get("request");
   const { connection } = useConnection();
   const cfg = useConfig();
   const router = useRouter();
   const me = wallet.publicKey?.toBase58();
 
-  const [type, setType] = useState<ListingType>("token_authority");
+  const [type, setType] = useState<ListingType>(forRequest ? "offchain" : "token_authority");
   const [mint, setMint] = useState("");
   const [token, setToken] = useState<TokenInfo | null>(null);
   const [authorities, setAuthorities] = useState<AuthorityKind[]>([]);
-  const [title, setTitle] = useState("");
+  const [title, setTitle] = useState(params.get("title") ?? "");
   const [description, setDescription] = useState("");
-  const [priceSol, setPriceSol] = useState("");
+  const [priceSol, setPriceSol] = useState(params.get("price") ?? "");
   const [category, setCategory] = useState<OffchainAsset["category"]>("project");
   const [links, setLinks] = useState("");
   const [deliverables, setDeliverables] = useState("");
@@ -33,7 +49,7 @@ export default function Sell() {
    * after it the refund is permissionless. The program accepts 1 to 90 and this was
    * never asked for, so every escrowed listing silently took the client default of 7.
    */
-  const [deliveryDays, setDeliveryDays] = useState(14);
+  const [deliveryDays, setDeliveryDays] = useState(Number(params.get("days")) || 14);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<Listing | null>(null);
@@ -60,7 +76,7 @@ export default function Sell() {
       const asset = type === "offchain"
         ? { category, links: links.split(/\s+/).filter(Boolean), deliverables }
         : type === "pump_creator" ? { mint: mint.trim() } : { mint: mint.trim(), authorities };
-      const l = await signedPost(wallet, "/api/listings", "create", null, { type, title, description, priceSol: Number(priceSol), asset });
+      const l = await signedPost(wallet, "/api/listings", "create", null, { type, title, description, priceSol: Number(priceSol), asset, requestId: forRequest ?? undefined });
       setCreated(l);
       if (l.status === "active") router.push(`/listings/${l.id}`);
     } catch (e) { setError((e as Error).message); } finally { setBusy(null); }

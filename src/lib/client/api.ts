@@ -2,7 +2,7 @@
 import bs58 from "bs58";
 import type { WalletContextState } from "@solana/wallet-adapter-react";
 import { buildAuthMessage } from "@/lib/auth";
-import type { AppConfig, Listing, ListingEvent, PumpControl, PumpControlVerdict, SignedRequest, TokenDossier } from "@/lib/types";
+import type { AppConfig, BuildRequest, Listing, ListingEvent, Proposal, PumpControl, PumpControlVerdict, SignedRequest, TokenDossier } from "@/lib/types";
 
 /** What /api/listings/:id/verify-domain answers for an off-chain listing. */
 export type DomainProofResult = {
@@ -66,8 +66,21 @@ export async function removeListingImage(wallet: WalletContextState, listingId: 
   return parse<{ image: null }>(res);
 }
 
+/** A signed request with no body to send — withdrawing something you posted. */
+export async function signedDelete<T>(wallet: WalletContextState, url: string, action: string, listingId: string | null): Promise<T> {
+  const auth = await signAuth(wallet, action, listingId);
+  const res = await fetch(url, {
+    method: "DELETE",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ auth }),
+  });
+  return parse<T>(res);
+}
+
 export const api = {
   config: () => fetch("/api/config").then((r) => parse<AppConfig>(r)),
+  requests: (q: Record<string, string> = {}) => fetch(`/api/requests?${new URLSearchParams(q)}`).then((r) => parse<BuildRequest[]>(r)),
+  request: (id: string) => fetch(`/api/requests/${id}`).then((r) => parse<{ request: BuildRequest; proposals: Proposal[] }>(r)),
   token: (mint: string) => fetch(`/api/token/${mint}`).then((r) => parse<TokenDossier>(r)),
   listings: (q: Record<string, string> = {}) => fetch(`/api/listings?${new URLSearchParams(q)}`).then((r) => parse<Listing[]>(r)),
   listing: (id: string) => fetch(`/api/listings/${id}`).then((r) => parse<{ listing: Listing; events: ListingEvent[] }>(r)),

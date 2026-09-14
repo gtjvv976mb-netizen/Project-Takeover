@@ -209,6 +209,65 @@ export interface Listing {
   updatedAt: number;
 }
 
+/* -------------------------------------------------------------- commissions */
+
+export type RequestCategory =
+  | "token" | "site" | "bot" | "contract" | "design" | "community" | "other";
+
+export const REQUEST_CATEGORY_LABELS: Record<RequestCategory, string> = {
+  token: "Token / coin launch",
+  site: "Website or web app",
+  bot: "Bot or automation",
+  contract: "Solana program",
+  design: "Design or branding",
+  community: "Community / growth",
+  other: "Something else",
+};
+
+export type RequestStatus = "open" | "awarded" | "cancelled";
+
+/**
+ * Work somebody wants built, posted before it exists.
+ *
+ * The mirror of a listing: a listing says "I made this, who wants it", a request says
+ * "I want this, who can make it". Both end in the same escrow — on an awarded request
+ * the developer becomes the seller, because they are the one delivering.
+ */
+export interface BuildRequest {
+  id: string;
+  poster: string;
+  title: string;
+  brief: string;
+  category: RequestCategory;
+  /** What the poster expects to pay. Indicative: the agreed price is the proposal's. */
+  budgetLamports: number;
+  /** How soon they want it. Also indicative. */
+  deliveryDays: number;
+  status: RequestStatus;
+  /** The developer whose proposal was accepted. */
+  awardedDev: string | null;
+  /** The escrow listing the award turned into, once the developer opens it. */
+  listingId: string | null;
+  proposalCount: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export type ProposalStatus = "open" | "accepted" | "withdrawn";
+
+/** A developer's answer to a request: what they would build, for how much, by when. */
+export interface Proposal {
+  id: number;
+  requestId: string;
+  dev: string;
+  pitch: string;
+  priceLamports: number;
+  deliveryDays: number;
+  status: ProposalStatus;
+  createdAt: number;
+  updatedAt: number;
+}
+
 /** A report filed against a listing by someone who says it should not be there. */
 export interface ListingReport {
   id: number;

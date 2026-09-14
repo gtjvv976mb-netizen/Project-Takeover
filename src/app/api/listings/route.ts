@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { PublicKey } from "@solana/web3.js";
-import { insertListing, listListings } from "@/lib/db";
+import { getRequest, insertListing, listListings, updateRequest } from "@/lib/db";
 import { handleError, HttpError, json, readSigned } from "@/lib/api-utils";
 import { fetchTokenInfo } from "@/lib/solana";
 import { pumpControlOf } from "@/lib/solana-shared";
@@ -19,8 +19,21 @@ const VALID_AUTH: AuthorityKind[] = ["mint", "freeze", "metadata_update"];
 
 export async function POST(req: Request) {
   try {
-    const { body, signer } = await readSigned<{ type: ListingType; title: string; description: string; priceSol: number; asset: ListingAsset }>(req, "create", null);
-    const { type, title, description, priceSol, asset } = body;
+    const { body, signer } = await readSigned<{ type: ListingType; title: string; description: string; priceSol: number; asset: ListingAsset; requestId?: string }>(req, "create", null);
+    const { type, title, description, priceSol, asset, requestId } = body;
+
+    // A listing can be the answer to a request somebody posted. Check that before
+    // anything else is written, so an awarded developer cannot be raced to the escrow
+    // and a stranger cannot attach their own listing to a request they did not win.
+    const request = requestId ? getRequest(requestId) : null;
+    if (requestId) {
+      if (!request) throw new HttpError(404, "That request does not exist");
+      if (request.status !== "awarded" || request.awardedDev !== signer) {
+        throw new HttpError(403, "This request has not been awarded to you");
+      }
+      if (request.listingId) throw new HttpError(409, "That request already has an escrow open");
+      if (type !== "offchain") throw new HttpError(400, "Commissioned work is delivered as a project, not as token authorities");
+    }
     if (!["token_authority", "pump_creator", "offchain"].includes(type)) throw new HttpError(400, "Bad listing type");
     if (!title || title.length > 80) throw new HttpError(400, "Title is required (max 80 chars)");
     if ((description ?? "").length > 4000) throw new HttpError(400, "Description too long");
@@ -85,6 +98,7 @@ export async function POST(req: Request) {
       escrowSig: null, paymentSig: null, settlementSig: null, deliveryNote: null, disputeReason: null, createdAt: now, updatedAt: now,
     };
     insertListing(listing);
+    if (request) updateRequest(request.id, { listingId: listing.id });
     return json(listing, 201);
   } catch (e) { return handleError(e); }
 }
