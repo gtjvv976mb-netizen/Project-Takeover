@@ -21,9 +21,9 @@ export const viewport = {
   ],
 };
 
-const TITLE = "Project: Takeover — think you'd run it better? Buy it.";
+const TITLE = "Project: Takeover — good projects shouldn't die when the founder moves on";
 const DESCRIPTION =
-  "Buy Solana projects outright, not by the bag. Memecoin authorities, pump.fun coin ownership, whole sites and communities — handed over on chain, with nobody holding the money but the code. Built something? Sell it.";
+  "Where Solana builders hand over what they made — a token, a pump.fun coin, a whole site — to someone ready to run it next. The money and the keys change hands in the same moment, so neither of you has to trust the other.";
 
 /**
  * The site had no Open Graph tags at all, so a pasted link showed as bare text: no image,
@@ -43,7 +43,7 @@ export const metadata: Metadata = {
     siteName: "Project: Takeover",
     title: TITLE,
     description: DESCRIPTION,
-    images: [{ url: "/brand/og.png", width: 1200, height: 630, alt: "Project: Takeover — think you'd run it better? Buy it." }],
+    images: [{ url: "/brand/og.png", width: 1200, height: 630, alt: "Project: Takeover — hand over what you built, on Solana" }],
   },
   twitter: {
     card: "summary_large_image",
