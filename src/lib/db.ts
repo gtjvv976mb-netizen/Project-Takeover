@@ -1,6 +1,6 @@
 import path from "node:path";
 import fs from "node:fs";
-import type { BuildRequest, BuilderProfile, BuilderStats, Listing, ListingEvent, ListingReport, ListingStatus, Proposal, TokenInfo, WantedEntry, WantedRow } from "./types";
+import type { BuildRequest, BuilderCard, BuilderProfile, BuilderStats, ForumComment, ForumPost, Listing, ListingEvent, ListingReport, ListingStatus, Proposal, TokenInfo, WantedEntry, WantedRow } from "./types";
 
 // node:sqlite is a Node 22.13+/24 built-in. We resolve it through
 // process.getBuiltinModule so the Next.js bundler leaves it alone.
@@ -122,8 +122,43 @@ function open() {
     );
     CREATE INDEX IF NOT EXISTS idx_proposals_request ON proposals(request_id);
     CREATE INDEX IF NOT EXISTS idx_proposals_dev ON proposals(dev);
+    CREATE TABLE IF NOT EXISTS posts (
+      id TEXT PRIMARY KEY,
+      author TEXT NOT NULL,
+      section TEXT NOT NULL,
+      title TEXT NOT NULL,
+      body TEXT NOT NULL,
+      removed_at INTEGER,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_posts_section ON posts(section, created_at);
+    CREATE INDEX IF NOT EXISTS idx_posts_author ON posts(author);
+    CREATE TABLE IF NOT EXISTS comments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      post_id TEXT NOT NULL,
+      parent_id INTEGER,
+      author TEXT NOT NULL,
+      body TEXT NOT NULL,
+      removed_at INTEGER,
+      created_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_comments_post ON comments(post_id);
+    CREATE INDEX IF NOT EXISTS idx_comments_author ON comments(author);
+    -- Votes are the rows; a score is always SUM(value) over them rather than a counter
+    -- kept alongside. A counter drifts the first time anything fails halfway, and a
+    -- score nobody can reconcile is worse than no score.
+    CREATE TABLE IF NOT EXISTS votes (
+      target TEXT NOT NULL,
+      voter TEXT NOT NULL,
+      value INTEGER NOT NULL,
+      created_at INTEGER NOT NULL,
+      PRIMARY KEY (target, voter)
+    );
+    CREATE INDEX IF NOT EXISTS idx_votes_target ON votes(target);
   `);
   addColumns(db, "listings", { image: "TEXT" });
+  addColumns(db, "builders", { skills: "TEXT", open_to_work: "INTEGER" });
   return db;
 }
 
@@ -317,13 +352,28 @@ export function resolveReports(listingId: string) {
 export function getBuilder(wallet: string): BuilderProfile | null {
   const r = db().prepare(`SELECT * FROM builders WHERE wallet = ?`).get(wallet) as Row | undefined;
   if (!r) return null;
-  return { wallet, name: r.name as string, bio: r.bio as string, github: r.github as string, x: r.x as string, website: r.website as string, updatedAt: Number(r.updated_at) };
+  return {
+    wallet, name: r.name as string, bio: r.bio as string, github: r.github as string,
+    x: r.x as string, website: r.website as string,
+    skills: parseSkills(r.skills as string | null),
+    openToWork: Number(r.open_to_work ?? 0) === 1,
+    updatedAt: Number(r.updated_at),
+  };
+}
+
+/** Stored as a comma-separated string, kept tidy on the way in and out. */
+function parseSkills(raw: string | null): string[] {
+  return (raw ?? "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean).slice(0, 12);
 }
 
 export function upsertBuilder(p: Omit<BuilderProfile, "updatedAt">) {
-  db().prepare(`INSERT INTO builders (wallet,name,bio,github,x,website,updated_at) VALUES (?,?,?,?,?,?,?)
-    ON CONFLICT(wallet) DO UPDATE SET name=excluded.name, bio=excluded.bio, github=excluded.github, x=excluded.x, website=excluded.website, updated_at=excluded.updated_at`)
-    .run(p.wallet, p.name, p.bio, p.github, p.x, p.website, Date.now());
+  const skills = [...new Set(parseSkills((p.skills ?? []).join(",")))].join(",");
+  db().prepare(`INSERT INTO builders (wallet,name,bio,github,x,website,skills,open_to_work,updated_at)
+      VALUES (?,?,?,?,?,?,?,?,?)
+    ON CONFLICT(wallet) DO UPDATE SET name=excluded.name, bio=excluded.bio, github=excluded.github,
+      x=excluded.x, website=excluded.website, skills=excluded.skills,
+      open_to_work=excluded.open_to_work, updated_at=excluded.updated_at`)
+    .run(p.wallet, p.name, p.bio, p.github, p.x, p.website, skills, p.openToWork ? 1 : 0, Date.now());
 }
 
 export function builderStats(wallet: string): BuilderStats {
@@ -521,4 +571,199 @@ export function awardRequest(requestId: string, proposalId: number, dev: string)
     d.exec("ROLLBACK");
     throw e;
   }
+}
+
+/* -------------------------------------------------------------------- forum */
+
+/**
+ * A post or comment plus its score, and how one wallet voted on it.
+ *
+ * `me` is threaded through the query rather than fetched separately so a page of
+ * fifty comments is one statement, not fifty-one.
+ */
+const POST_SELECT = `
+  SELECT p.*,
+    COALESCE((SELECT SUM(value) FROM votes v WHERE v.target = 'post:' || p.id), 0) AS score,
+    (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id AND c.removed_at IS NULL) AS comment_count,
+    COALESCE((SELECT value FROM votes v WHERE v.target = 'post:' || p.id AND v.voter = ?), 0) AS my_vote
+  FROM posts p`;
+
+function rowToPost(r: Row): ForumPost {
+  return {
+    id: r.id as string,
+    author: r.author as string,
+    section: r.section as ForumPost["section"],
+    title: r.title as string,
+    body: r.body as string,
+    score: Number(r.score ?? 0),
+    commentCount: Number(r.comment_count ?? 0),
+    myVote: Number(r.my_vote ?? 0),
+    removedAt: r.removed_at ? Number(r.removed_at) : null,
+    createdAt: Number(r.created_at),
+    updatedAt: Number(r.updated_at),
+  };
+}
+
+export function insertPost(p: Omit<ForumPost, "score" | "commentCount" | "myVote" | "removedAt">) {
+  db().prepare(`INSERT INTO posts (id,author,section,title,body,created_at,updated_at) VALUES (?,?,?,?,?,?,?)`)
+    .run(p.id, p.author, p.section, p.title, p.body, p.createdAt, p.updatedAt);
+}
+
+export function getPost(id: string, me = ""): ForumPost | null {
+  const r = db().prepare(`${POST_SELECT} WHERE p.id = ?`).get(me, id) as Row | undefined;
+  return r ? rowToPost(r) : null;
+}
+
+/**
+ * `new` is plain recency. `top` is the raw score. `hot` decays a score against age so a
+ * day-old thread with four votes does not outrank this morning's with three — the usual
+ * trick, kept simple and computed in SQL so it cannot disagree with what is stored.
+ */
+export function listPosts(opts: { section?: string; sort?: "hot" | "new" | "top"; author?: string; me?: string; limit?: number } = {}): ForumPost[] {
+  const where = ["p.removed_at IS NULL"];
+  const params: (string | number)[] = [opts.me ?? ""];
+  if (opts.section) { where.push("p.section = ?"); params.push(opts.section); }
+  if (opts.author) { where.push("p.author = ?"); params.push(opts.author); }
+  const order = opts.sort === "new" ? "p.created_at DESC"
+    : opts.sort === "top" ? "score DESC, p.created_at DESC"
+    : "(CAST(score AS REAL) + 1.0) / (((? - p.created_at) / 3600000.0) + 2.0) DESC, p.created_at DESC";
+  const sql = `${POST_SELECT} WHERE ${where.join(" AND ")} ORDER BY ${order} LIMIT ?`;
+  if (!opts.sort || opts.sort === "hot") params.push(Date.now());
+  params.push(opts.limit ?? 100);
+  return (db().prepare(sql).all(...params) as Row[]).map(rowToPost);
+}
+
+export function setPostRemoved(id: string, removed: boolean) {
+  db().prepare(`UPDATE posts SET removed_at = ?, updated_at = ? WHERE id = ?`)
+    .run(removed ? Date.now() : null, Date.now(), id);
+}
+
+function rowToComment(r: Row): ForumComment {
+  return {
+    id: Number(r.id),
+    postId: r.post_id as string,
+    parentId: r.parent_id ? Number(r.parent_id) : null,
+    author: r.author as string,
+    body: r.body as string,
+    score: Number(r.score ?? 0),
+    myVote: Number(r.my_vote ?? 0),
+    removedAt: r.removed_at ? Number(r.removed_at) : null,
+    createdAt: Number(r.created_at),
+  };
+}
+
+export function insertComment(c: { postId: string; parentId: number | null; author: string; body: string }): ForumComment {
+  const now = Date.now();
+  const r = db().prepare(`INSERT INTO comments (post_id,parent_id,author,body,created_at) VALUES (?,?,?,?,?) RETURNING *`)
+    .get(c.postId, c.parentId, c.author, c.body, now) as Row;
+  return rowToComment(r);
+}
+
+export function listComments(postId: string, me = ""): ForumComment[] {
+  return (db().prepare(`
+    SELECT c.*,
+      COALESCE((SELECT SUM(value) FROM votes v WHERE v.target = 'comment:' || c.id), 0) AS score,
+      COALESCE((SELECT value FROM votes v WHERE v.target = 'comment:' || c.id AND v.voter = ?), 0) AS my_vote
+    FROM comments c WHERE c.post_id = ? ORDER BY c.created_at ASC`).all(me, postId) as Row[])
+    .map(rowToComment);
+}
+
+export function getComment(id: number): ForumComment | null {
+  const r = db().prepare(`SELECT *, 0 AS score, 0 AS my_vote FROM comments WHERE id = ?`).get(id) as Row | undefined;
+  return r ? rowToComment(r) : null;
+}
+
+export function setCommentRemoved(id: number, removed: boolean) {
+  db().prepare(`UPDATE comments SET removed_at = ? WHERE id = ?`).run(removed ? Date.now() : null, id);
+}
+
+/**
+ * Cast, change or clear a vote. Voting the same way twice clears it, which is what every
+ * arrow on the internet does and what people expect from a second click.
+ */
+export function castVote(target: string, voter: string, value: 1 | -1 | 0) {
+  if (value === 0) {
+    db().prepare(`DELETE FROM votes WHERE target = ? AND voter = ?`).run(target, voter);
+    return;
+  }
+  db().prepare(`INSERT INTO votes (target,voter,value,created_at) VALUES (?,?,?,?)
+    ON CONFLICT(target,voter) DO UPDATE SET value = excluded.value, created_at = excluded.created_at`)
+    .run(target, voter, value, Date.now());
+}
+
+export function myVote(target: string, voter: string): number {
+  const r = db().prepare(`SELECT value FROM votes WHERE target = ? AND voter = ?`).get(target, voter) as Row | undefined;
+  return r ? Number(r.value) : 0;
+}
+
+export function scoreOf(target: string): number {
+  const r = db().prepare(`SELECT COALESCE(SUM(value),0) AS s FROM votes WHERE target = ?`).get(target) as Row;
+  return Number(r.s ?? 0);
+}
+
+/**
+ * When this wallet last posted or commented. Used to rate-limit: a wallet costs nothing
+ * to make, so this is a speed bump against flooding rather than real sybil resistance.
+ */
+export function lastWroteAt(wallet: string): number {
+  const r = db().prepare(`SELECT MAX(t) AS t FROM (
+      SELECT MAX(created_at) AS t FROM posts WHERE author = ?
+      UNION ALL SELECT MAX(created_at) FROM comments WHERE author = ?
+    )`).get(wallet, wallet) as Row;
+  return Number(r.t ?? 0);
+}
+
+/* ------------------------------------------------------- builders directory */
+
+/**
+ * Everyone who has done anything here, with what they did kept in separate columns.
+ *
+ * Settled deals and SOL come from escrow and cannot be talked into existence. Posts and
+ * forum score can be. They are never added together, because a single blended "score"
+ * would let an afternoon of posting outrank a delivered project.
+ */
+export function builderDirectory(opts: { skill?: string; openOnly?: boolean; limit?: number } = {}): BuilderCard[] {
+  const wallets = db().prepare(`
+    SELECT wallet FROM (
+      SELECT seller AS wallet FROM listings WHERE status != 'draft'
+      UNION SELECT author FROM posts WHERE removed_at IS NULL
+      UNION SELECT dev FROM proposals WHERE status != 'withdrawn'
+      UNION SELECT wallet FROM builders
+    ) GROUP BY wallet`).all() as Row[];
+
+  const cards = wallets.map((w) => {
+    const wallet = w.wallet as string;
+    const counts = db().prepare(`
+      SELECT
+        (SELECT COUNT(*) FROM posts WHERE author = ? AND removed_at IS NULL) AS posts,
+        (SELECT COALESCE(SUM(value),0) FROM votes v
+           JOIN posts p ON v.target = 'post:' || p.id WHERE p.author = ?) AS forum_score,
+        (SELECT COUNT(*) FROM requests WHERE awarded_dev = ?) AS commissions,
+        (SELECT MAX(created_at) FROM posts WHERE author = ?) AS last_post
+      `).get(wallet, wallet, wallet, wallet) as Row;
+    return {
+      wallet,
+      profile: getBuilder(wallet),
+      stats: builderStats(wallet),
+      posts: Number(counts.posts ?? 0),
+      forumScore: Number(counts.forum_score ?? 0),
+      commissions: Number(counts.commissions ?? 0),
+      lastSeen: counts.last_post ? Number(counts.last_post) : null,
+    } satisfies BuilderCard;
+  });
+
+  const filtered = cards.filter((c) => {
+    if (opts.openOnly && !c.profile?.openToWork) return false;
+    if (opts.skill && !(c.profile?.skills ?? []).includes(opts.skill.toLowerCase())) return false;
+    return true;
+  });
+
+  // Delivered work first, then commissions won, then everything else — so the directory
+  // is ordered by what someone finished, not by how loudly they are around.
+  filtered.sort((a, b) =>
+    b.stats.sold - a.stats.sold ||
+    b.commissions - a.commissions ||
+    b.stats.listed - a.stats.listed ||
+    b.forumScore - a.forumScore);
+  return filtered.slice(0, opts.limit ?? 100);
 }

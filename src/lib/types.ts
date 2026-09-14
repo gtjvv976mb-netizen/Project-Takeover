@@ -164,6 +164,10 @@ export interface BuilderProfile {
   github: string;
   x: string;
   website: string;
+  /** Free-form tags, lower-cased and de-duplicated. What they build, in their words. */
+  skills: string[];
+  /** Whether they want commissions right now. Directory sorts on it. */
+  openToWork: boolean;
   updatedAt: number;
 }
 
@@ -266,6 +270,66 @@ export interface Proposal {
   status: ProposalStatus;
   createdAt: number;
   updatedAt: number;
+}
+
+/* -------------------------------------------------------------------- forum */
+
+export type Section = "hiring" | "offering" | "showcase" | "help" | "collab" | "general";
+
+export const SECTIONS: { id: Section; label: string; blurb: string; emoji: string }[] = [
+  { id: "hiring", label: "Asks", blurb: "Something you want built. Loose ideas welcome — a request with escrow is the formal version.", emoji: "🧰" },
+  { id: "offering", label: "For hire", blurb: "What you build, what you charge, what you have shipped.", emoji: "🛠️" },
+  { id: "showcase", label: "Shipped", blurb: "Something you made. Show the thing, not the roadmap.", emoji: "🚀" },
+  { id: "help", label: "Help", blurb: "Stuck on something. Anchor, pump.fun, RPCs, wallets.", emoji: "🆘" },
+  { id: "collab", label: "Collab", blurb: "Looking for someone to build alongside rather than pay.", emoji: "🤝" },
+  { id: "general", label: "General", blurb: "Everything else.", emoji: "💬" },
+];
+
+export const SECTION_LABELS = Object.fromEntries(SECTIONS.map((s) => [s.id, s.label])) as Record<Section, string>;
+
+export interface ForumPost {
+  id: string;
+  author: string;
+  section: Section;
+  title: string;
+  body: string;
+  score: number;
+  commentCount: number;
+  /** How the wallet reading this voted: 1, -1, or 0 for not at all. */
+  myVote: number;
+  removedAt: number | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface ForumComment {
+  id: number;
+  postId: string;
+  parentId: number | null;
+  author: string;
+  body: string;
+  score: number;
+  myVote: number;
+  removedAt: number | null;
+  createdAt: number;
+}
+
+/**
+ * What a wallet has actually done here, for the builders directory.
+ *
+ * Deals and SOL come from settled escrow, so they cannot be manufactured by talking.
+ * Posts and score come from the forum, where they can — which is why the two are
+ * counted separately and never added together into one number.
+ */
+export interface BuilderCard {
+  wallet: string;
+  profile: BuilderProfile | null;
+  stats: BuilderStats;
+  posts: number;
+  forumScore: number;
+  /** Commissions delivered through an awarded request. */
+  commissions: number;
+  lastSeen: number | null;
 }
 
 /** A report filed against a listing by someone who says it should not be there. */

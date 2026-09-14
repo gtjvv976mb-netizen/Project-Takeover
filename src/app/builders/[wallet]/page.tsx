@@ -16,7 +16,7 @@ export default function BuilderPage({ params }: { params: Promise<{ wallet: stri
   const me = w.publicKey?.toBase58();
   const [data, setData] = useState<Data | null>(null);
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ name: "", bio: "", github: "", x: "", website: "" });
+  const [form, setForm] = useState({ name: "", bio: "", github: "", x: "", website: "", skills: "", openToWork: false });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -25,7 +25,7 @@ export default function BuilderPage({ params }: { params: Promise<{ wallet: stri
     fetch(`/api/builders/${wallet}`).then((r) => r.json()).then((d: Data) => {
       if (cancelled) return;
       setData(d);
-      if (d.profile) setForm({ name: d.profile.name, bio: d.profile.bio, github: d.profile.github, x: d.profile.x, website: d.profile.website });
+      if (d.profile) setForm({ name: d.profile.name, bio: d.profile.bio, github: d.profile.github, x: d.profile.x, website: d.profile.website, skills: (d.profile.skills ?? []).join(", "), openToWork: !!d.profile.openToWork });
     });
     return () => { cancelled = true; };
   }, [wallet]);
@@ -67,6 +67,15 @@ export default function BuilderPage({ params }: { params: Promise<{ wallet: stri
           <Field label="GitHub"><input className={inputCls} value={form.github} onChange={(e) => setForm({ ...form, github: e.target.value })} placeholder="https://github.com/you" /></Field>
           <Field label="X"><input className={inputCls} value={form.x} onChange={(e) => setForm({ ...form, x: e.target.value })} placeholder="https://x.com/you" /></Field>
           <div className="sm:col-span-2"><Field label="Bio" hint="What you build, what you've shipped, what you're looking for."><textarea className={inputCls} rows={4} value={form.bio} onChange={(e) => setForm({ ...form, bio: e.target.value })} maxLength={600} /></Field></div>
+          <div className="sm:col-span-2"><Field label="Skills" hint="Comma separated, up to 12. These are what the builders directory filters on — anchor, rust, next.js, telegram bots.">
+            <input className={inputCls} value={form.skills} onChange={(e) => setForm({ ...form, skills: e.target.value })} placeholder="anchor, rust, next.js, bots" />
+          </Field></div>
+          <div className="sm:col-span-2">
+            <label className="flex cursor-pointer items-center gap-2.5 text-[14px] text-ink">
+              <input type="checkbox" checked={form.openToWork} onChange={(e) => setForm({ ...form, openToWork: e.target.checked })} />
+              Open to work — show me to people looking for someone to build something
+            </label>
+          </div>
           {error && <div className="sm:col-span-2"><Alert kind="error">{error}</Alert></div>}
           <div className="sm:col-span-2"><Button onClick={save} disabled={busy}>{busy ? "Signing…" : "Save profile"}</Button></div>
         </section>
