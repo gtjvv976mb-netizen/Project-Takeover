@@ -1,5 +1,5 @@
 import { PublicKey } from "@solana/web3.js";
-import { builderStats, getBuilder, listListings, upsertBuilder } from "@/lib/db";
+import { builderStats, getBuilder, listListings, reputationOf, reviewsAbout, upsertBuilder } from "@/lib/db";
 import { handleError, HttpError, json, readSigned } from "@/lib/api-utils";
 export const dynamic = "force-dynamic";
 
@@ -7,7 +7,14 @@ export async function GET(_: Request, ctx: { params: Promise<{ wallet: string }>
   try {
     const wallet = new PublicKey((await ctx.params).wallet).toBase58();
     const listings = listListings({ status: "all", wallet }).filter((l) => l.seller === wallet && l.status !== "draft");
-    return json({ wallet, profile: getBuilder(wallet), stats: builderStats(wallet), listings });
+    return json({
+      wallet,
+      profile: getBuilder(wallet),
+      stats: builderStats(wallet),
+      reputation: reputationOf(wallet),
+      reviews: reviewsAbout(wallet),
+      listings,
+    });
   } catch (e) { return handleError(e); }
 }
 

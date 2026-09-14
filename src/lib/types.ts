@@ -272,6 +272,55 @@ export interface Proposal {
   updatedAt: number;
 }
 
+/* --------------------------------------------------------------- reputation */
+
+/**
+ * One side's word on how a deal went.
+ *
+ * A review cannot exist without a settled escrow behind it. Not "verified purchase" as a
+ * badge, but as the only way to write one: the API refuses unless the listing reached a
+ * terminal state on chain and the signer was one of its two parties. Since the program
+ * blocks a seller from buying their own listing, manufacturing a review means running two
+ * wallets and pushing real SOL through escrow — at the platform fee. Faking it is not
+ * impossible, it just costs money, which is the most an open system can honestly claim.
+ */
+export interface Review {
+  id: number;
+  listingId: string;
+  reviewer: string;
+  /** Who is being reviewed — the counterparty. */
+  subject: string;
+  /** The subject's role in that deal, so "delivered" and "paid" are not confused. */
+  role: "buyer" | "seller";
+  rating: number;
+  body: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** What a wallet's history adds up to. Every field traces to a settled deal. */
+export interface Reputation {
+  wallet: string;
+  /** Deals that settled with them delivering. */
+  soldCount: number;
+  /** Deals that settled with them paying. */
+  boughtCount: number;
+  /** Commissions won through a request and delivered. */
+  commissionsDelivered: number;
+  earnedLamports: number;
+  spentLamports: number;
+  /**
+   * Deals of theirs that ended with the buyer's money going back. The other half of a
+   * track record, and the half a seller would rather you did not see.
+   */
+  refundedAgainst: number;
+  disputedAgainst: number;
+  ratingCount: number;
+  /** Mean of every rating received, or null when nobody has rated them yet. */
+  averageRating: number | null;
+  firstDealAt: number | null;
+}
+
 /* -------------------------------------------------------------------- forum */
 
 export type Section = "hiring" | "offering" | "showcase" | "help" | "collab" | "general";
@@ -329,6 +378,7 @@ export interface BuilderCard {
   forumScore: number;
   /** Commissions delivered through an awarded request. */
   commissions: number;
+  reputation: Reputation;
   lastSeen: number | null;
 }
 

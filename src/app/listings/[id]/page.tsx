@@ -7,7 +7,7 @@ import { buyTokenOnChain, cancelOnChain, createListingOnChain, disputeOnChain, f
 import { explorerUrl, useConfig } from "@/components/ConfigContext";
 import { Alert, Button, Chip, inputCls, StatusBadge, TypeBadge } from "@/components/ui";
 import { CoverArt } from "@/components/CoverArt";
-import { formatSol, OFFCHAIN_CATEGORY_LABELS, shortKey, type Listing, type ListingEvent, type OffchainAsset, type PumpCreatorAsset, type TokenAuthorityAsset } from "@/lib/types";
+import { formatSol, OFFCHAIN_CATEGORY_LABELS, shortKey, type Listing, type ListingEvent, type OffchainAsset, type PumpCreatorAsset, type Review, type TokenAuthorityAsset } from "@/lib/types";
 import { BuilderChip } from "@/components/Builder";
 
 export default function ListingPage({ params }: { params: Promise<{ id: string }> }) {
@@ -43,6 +43,10 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
     return () => clearInterval(t);
   }, []);
   const [reason, setReason] = useState("");
+  /** Set once the deal has settled and this wallet was one of its two parties. */
+  const [myReview, setMyReview] = useState<Review | null>(null);
+  const [rating, setRating] = useState(0);
+  const [reviewBody, setReviewBody] = useState("");
 
   const reload = useCallback(async () => {
     const r = await api.listing(id);
@@ -51,6 +55,16 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
     if (r.listing.type === "pump_creator") api.handover(id).then(setHandover).catch(() => setHandover(null));
     if (r.listing.type === "offchain") api.domainProof(id).then(setProof).catch(() => setProof(null));
     api.reports(id).then((x) => setReports(x.reports)).catch(() => {});
+    // Only ask for the reviewer's own row once there is a settled deal to have one on.
+    if (me && (r.listing.status === "sold" || r.listing.status === "refunded")) {
+      fetch(`/api/listings/${id}/review`).then((x) => x.json())
+        .then((rows: Review[]) => {
+          const mine = Array.isArray(rows) ? rows.find((v) => v.reviewer === me) ?? null : null;
+          setMyReview(mine);
+          if (mine) { setRating(mine.rating); setReviewBody(mine.body); }
+        })
+        .catch(() => {});
+    }
     // refresh the authoritative state from the program itself
     try {
       const chain = await fetch(`/api/listings/${id}/sync`, { method: "POST" }).then((x) => x.json());
@@ -60,7 +74,9 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
         if (chain.listing) setL(chain.listing);
       }
     } catch { /* index still renders without it */ }
-  }, [id]);
+    // `me` is read above, so it belongs here: without it, connecting a wallet after the
+    // page loaded would keep using the empty string it closed over.
+  }, [id, me]);
   useEffect(() => {
     let cancelled = false;
     // reload() awaits the network before it touches state, so nothing is set during
@@ -117,6 +133,9 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
     signedPost(wallet, `/api/listings/${l.id}/note`, "note", l.id, { note }));
 
   const pastDeadline = deadline !== null && nowSec >= deadline;
+  // A review needs a finished deal and a counterparty. Cancelled listings had neither.
+  const settled = l.status === "sold" || l.status === "refunded";
+  const canReview = !!me && settled && !!l.buyer && (isSeller || isBuyer);
   /** Only while the deal is still open: a settled listing is closed on purpose. */
   const notOpened = onChain === false && (l.status === "draft" || l.status === "active");
 
@@ -237,6 +256,43 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
 
         {error && <Alert kind="error">{error}</Alert>}
         {notice && <Alert kind="info">{notice}</Alert>}
+
+        {/* The deal is over and this wallet was in it: the one moment a review can be
+            written. Offered to both sides, because a seller's experience of a buyer is
+            worth as much to the next seller as the other way round. */}
+        {canReview && (
+          <div className="card space-y-3 p-5">
+            <h3 className="text-[16px] font-bold text-ink">
+              {myReview ? "Your review" : `How did this go with the ${isSeller ? "buyer" : "seller"}?`}
+            </h3>
+            <div className="flex gap-1.5">
+              {[1, 2, 3, 4, 5].map((n) => (
+                <button key={n} type="button" onClick={() => setRating(n)} aria-label={`${n} out of 5`}
+                  aria-pressed={rating === n}
+                  className="rounded-lg border px-3 py-1.5 text-[14px] font-semibold transition-colors"
+                  style={{
+                    borderColor: rating >= n ? "var(--color-honey)" : "var(--color-line)",
+                    background: rating >= n ? "color-mix(in srgb, var(--color-honey) 14%, var(--color-tint-base))" : "transparent",
+                    color: rating >= n ? "var(--color-ink)" : "var(--color-muted)",
+                  }}>
+                  {n}
+                </button>
+              ))}
+            </div>
+            <textarea className={inputCls} rows={3} value={reviewBody} onChange={(e) => setReviewBody(e.target.value)}
+              placeholder={isSeller ? "Did they pay and communicate?" : "Did they deliver what they said, on time?"} />
+            <Button className="w-full" disabled={!!busy || reviewBody.trim().length < 10 || !rating}
+              onClick={() => run("Sign your review…", async () => {
+                await signedPost(wallet, `/api/listings/${l.id}/review`, "review", l.id, { rating, body: reviewBody });
+                setNotice("Review posted. It shows on their builder page.");
+              })}>
+              {busy ?? (myReview ? "Update my review" : "Post review")}
+            </Button>
+            <p className="text-[12.5px] text-faint">
+              Public, and tied to this deal. Only the two of you can write one here.
+            </p>
+          </div>
+        )}
 
         {!me && <Alert kind="warn">Connect a wallet to buy or manage this listing.</Alert>}
 

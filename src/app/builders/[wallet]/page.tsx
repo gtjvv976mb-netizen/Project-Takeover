@@ -2,12 +2,13 @@
 import { use, useEffect, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { signedPost } from "@/lib/client/api";
-import { shortKey, type BuilderProfile, type BuilderStats, type Listing } from "@/lib/types";
+import { shortKey, type BuilderProfile, type BuilderStats, type Listing, type Reputation, type Review } from "@/lib/types";
 import { Alert, Button, Field, inputCls, ListingCard } from "@/components/ui";
 import { StatTiles } from "@/components/Builder";
+import { ReputationPanel, ReviewList } from "@/components/Reputation";
 import { explorerUrl, useConfig } from "@/components/ConfigContext";
 
-type Data = { wallet: string; profile: BuilderProfile | null; stats: BuilderStats; listings: Listing[] };
+type Data = { wallet: string; profile: BuilderProfile | null; stats: BuilderStats; reputation: Reputation; reviews: Review[]; listings: Listing[] };
 
 export default function BuilderPage({ params }: { params: Promise<{ wallet: string }> }) {
   const { wallet } = use(params);
@@ -83,13 +84,20 @@ export default function BuilderPage({ params }: { params: Promise<{ wallet: stri
 
       <StatTiles stats={data.stats} />
 
+      {data.reputation && (
+        <div className="grid gap-5 lg:grid-cols-[320px_1fr] lg:items-start">
+          <ReputationPanel rep={data.reputation} />
+          <ReviewList reviews={data.reviews ?? []} />
+        </div>
+      )}
+
       <section>
         <h2 className="mb-3 text-lg font-semibold">On the market ({active.length})</h2>
         {active.length ? <div className="grid gap-4 md:grid-cols-2">{active.map((l) => <ListingCard key={l.id} l={l} />)}</div> : <p className="text-faint">Nothing listed right now.</p>}
       </section>
       {past.length > 0 && (
         <section>
-          <h2 className="mb-3 text-lg font-semibold">Track record ({past.length})</h2>
+          <h2 className="mb-3 text-lg font-semibold">Past listings ({past.length})</h2>
           <div className="grid gap-4 md:grid-cols-2">{past.map((l) => <ListingCard key={l.id} l={l} />)}</div>
         </section>
       )}

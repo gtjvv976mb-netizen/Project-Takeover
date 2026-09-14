@@ -1,6 +1,6 @@
 import path from "node:path";
 import fs from "node:fs";
-import type { BuildRequest, BuilderCard, BuilderProfile, BuilderStats, ForumComment, ForumPost, Listing, ListingEvent, ListingReport, ListingStatus, Proposal, TokenInfo, WantedEntry, WantedRow } from "./types";
+import type { BuildRequest, BuilderCard, BuilderProfile, BuilderStats, ForumComment, ForumPost, Listing, ListingEvent, ListingReport, ListingStatus, Proposal, Reputation, Review, TokenInfo, WantedEntry, WantedRow } from "./types";
 
 // node:sqlite is a Node 22.13+/24 built-in. We resolve it through
 // process.getBuiltinModule so the Next.js bundler leaves it alone.
@@ -156,6 +156,22 @@ function open() {
       PRIMARY KEY (target, voter)
     );
     CREATE INDEX IF NOT EXISTS idx_votes_target ON votes(target);
+    CREATE TABLE IF NOT EXISTS reviews (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      listing_id TEXT NOT NULL,
+      reviewer TEXT NOT NULL,
+      subject TEXT NOT NULL,
+      role TEXT NOT NULL,
+      rating INTEGER NOT NULL,
+      body TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      -- One per person per deal. A deal has two sides, so it can carry two reviews and
+      -- never three; writing again edits your own rather than adding to it.
+      UNIQUE (listing_id, reviewer)
+    );
+    CREATE INDEX IF NOT EXISTS idx_reviews_subject ON reviews(subject);
+    CREATE INDEX IF NOT EXISTS idx_reviews_listing ON reviews(listing_id);
   `);
   addColumns(db, "listings", { image: "TEXT" });
   addColumns(db, "builders", { skills: "TEXT", open_to_work: "INTEGER" });
@@ -748,6 +764,7 @@ export function builderDirectory(opts: { skill?: string; openOnly?: boolean; lim
       posts: Number(counts.posts ?? 0),
       forumScore: Number(counts.forum_score ?? 0),
       commissions: Number(counts.commissions ?? 0),
+      reputation: reputationOf(wallet),
       lastSeen: counts.last_post ? Number(counts.last_post) : null,
     } satisfies BuilderCard;
   });
@@ -766,4 +783,88 @@ export function builderDirectory(opts: { skill?: string; openOnly?: boolean; lim
     b.stats.listed - a.stats.listed ||
     b.forumScore - a.forumScore);
   return filtered.slice(0, opts.limit ?? 100);
+}
+
+/* --------------------------------------------------------------- reputation */
+
+function rowToReview(r: Row): Review {
+  return {
+    id: Number(r.id),
+    listingId: r.listing_id as string,
+    reviewer: r.reviewer as string,
+    subject: r.subject as string,
+    role: r.role as Review["role"],
+    rating: Number(r.rating),
+    body: r.body as string,
+    createdAt: Number(r.created_at),
+    updatedAt: Number(r.updated_at),
+  };
+}
+
+/** Write or rewrite the signer's review of one deal. */
+export function upsertReview(r: Omit<Review, "id" | "createdAt" | "updatedAt">): Review {
+  const now = Date.now();
+  db().prepare(`INSERT INTO reviews (listing_id,reviewer,subject,role,rating,body,created_at,updated_at)
+      VALUES (?,?,?,?,?,?,?,?)
+    ON CONFLICT(listing_id, reviewer) DO UPDATE SET
+      rating=excluded.rating, body=excluded.body, updated_at=excluded.updated_at`)
+    .run(r.listingId, r.reviewer, r.subject, r.role, r.rating, r.body, now, now);
+  const row = db().prepare(`SELECT * FROM reviews WHERE listing_id = ? AND reviewer = ?`)
+    .get(r.listingId, r.reviewer) as Row;
+  return rowToReview(row);
+}
+
+export function reviewsForListing(listingId: string): Review[] {
+  return (db().prepare(`SELECT * FROM reviews WHERE listing_id = ? ORDER BY created_at ASC`).all(listingId) as Row[])
+    .map(rowToReview);
+}
+
+export function reviewsAbout(wallet: string, limit = 50): Review[] {
+  return (db().prepare(`SELECT * FROM reviews WHERE subject = ? ORDER BY created_at DESC LIMIT ?`)
+    .all(wallet, limit) as Row[]).map(rowToReview);
+}
+
+export function myReviewOf(listingId: string, reviewer: string): Review | null {
+  const r = db().prepare(`SELECT * FROM reviews WHERE listing_id = ? AND reviewer = ?`)
+    .get(listingId, reviewer) as Row | undefined;
+  return r ? rowToReview(r) : null;
+}
+
+/**
+ * Everything a wallet's history says about them.
+ *
+ * Only terminal listings count. `sold` means the escrow paid out; `refunded` means it
+ * went back to the buyer, which is the seller's failure and is counted against them
+ * rather than quietly dropped. Drafts and cancellations never happened and are ignored.
+ */
+export function reputationOf(wallet: string): Reputation {
+  const r = db().prepare(`
+    SELECT
+      (SELECT COUNT(*) FROM listings WHERE seller = ? AND status = 'sold') AS sold,
+      (SELECT COUNT(*) FROM listings WHERE buyer = ? AND status = 'sold') AS bought,
+      (SELECT COALESCE(SUM(price_lamports),0) FROM listings WHERE seller = ? AND status = 'sold') AS earned,
+      (SELECT COALESCE(SUM(price_lamports),0) FROM listings WHERE buyer = ? AND status = 'sold') AS spent,
+      (SELECT COUNT(*) FROM listings WHERE seller = ? AND status = 'refunded') AS refunded,
+      (SELECT COUNT(*) FROM listings WHERE seller = ? AND status = 'disputed') AS disputed,
+      (SELECT COUNT(*) FROM requests rq JOIN listings l ON rq.listing_id = l.id
+         WHERE rq.awarded_dev = ? AND l.status = 'sold') AS commissions,
+      (SELECT COUNT(*) FROM reviews WHERE subject = ?) AS rating_count,
+      (SELECT AVG(rating) FROM reviews WHERE subject = ?) AS avg_rating,
+      (SELECT MIN(created_at) FROM listings
+         WHERE (seller = ? OR buyer = ?) AND status IN ('sold','refunded')) AS first_deal
+  `).get(wallet, wallet, wallet, wallet, wallet, wallet, wallet, wallet, wallet, wallet, wallet) as Row;
+
+  return {
+    wallet,
+    soldCount: Number(r.sold ?? 0),
+    boughtCount: Number(r.bought ?? 0),
+    commissionsDelivered: Number(r.commissions ?? 0),
+    earnedLamports: Number(r.earned ?? 0),
+    spentLamports: Number(r.spent ?? 0),
+    refundedAgainst: Number(r.refunded ?? 0),
+    disputedAgainst: Number(r.disputed ?? 0),
+    ratingCount: Number(r.rating_count ?? 0),
+    averageRating: r.avg_rating === null || r.avg_rating === undefined ? null : Number(r.avg_rating),
+    firstDealAt: r.first_deal ? Number(r.first_deal) : null,
+  };
 }

@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Alert, Chip, inputCls, Sigil } from "@/components/ui";
+import { Stars } from "@/components/Reputation";
 import { formatSol, shortKey, type BuilderCard } from "@/lib/types";
 
 export default function BuildersPage() {
@@ -85,7 +86,14 @@ export default function BuildersPage() {
                 <Sigil wallet={b.wallet} size={42} />
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-bold text-ink">{b.profile?.name || shortKey(b.wallet, 4)}</div>
-                  {b.profile?.openToWork && <span className="text-[12.5px] font-semibold" style={{ color: "var(--color-green)" }}>Open to work</span>}
+                  {b.reputation?.averageRating !== null && b.reputation?.averageRating !== undefined ? (
+                    <span className="flex items-center gap-1.5 text-[12.5px] text-muted">
+                      <Stars rating={b.reputation.averageRating} size={12} />
+                      {b.reputation.averageRating.toFixed(1)} · {b.reputation.ratingCount}
+                    </span>
+                  ) : b.profile?.openToWork ? (
+                    <span className="text-[12.5px] font-semibold" style={{ color: "var(--color-green)" }}>Open to work</span>
+                  ) : null}
                 </div>
               </div>
 
@@ -106,6 +114,12 @@ export default function BuildersPage() {
                     {b.stats.earnedLamports > 0 && ` · ${formatSol(b.stats.earnedLamports, 1)} SOL`}
                   </span>
                 </div>
+                {b.reputation?.refundedAgainst > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted">Refunded to buyers</span>
+                    <span className="font-semibold" style={{ color: "var(--color-rose)" }}>{b.reputation.refundedAgainst}</span>
+                  </div>
+                )}
                 <div className="flex items-center justify-between">
                   <span className="text-faint">On the board</span>
                   <span className="text-faint">{b.posts} posts · {b.forumScore} score</span>
