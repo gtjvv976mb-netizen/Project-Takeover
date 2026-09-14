@@ -92,7 +92,7 @@ body{${dark ? darkGround : lightGround}display:flex;flex-direction:column;align-
 .dot{width:10px;height:10px;border-radius:99px;background:${TEAL};box-shadow:0 0 0 6px ${TEAL}22}
 </style></head><body>
   ${mark({ size: 190, glow: dark })}
-  <div class="name">Nobody trusts anybody.<br><b>Everybody gets paid.</b></div>
+  <div class="name">You dream it.<br><b>Devs build it.</b></div>
   <div class="tag">Sell what you shipped. Commission what you need. On Solana.</div>
   <div class="foot"><span class="dot"></span>project-takeover.com</div>
 </body></html>`;
@@ -111,7 +111,7 @@ body{${dark ? darkGround : lightGround}display:flex;align-items:center;gap:46px;
   ${mark({ size: 296, glow: dark })}
   <div>
     <div class="name">Project: <b>Takeover</b></div>
-    <div class="tag">Nobody trusts anybody. <b>Everybody gets paid.</b></div>
+    <div class="tag">You dream it. <b>Devs build it.</b></div>
     <div class="foot"><span class="dot"></span>Escrow holds the money until the work lands &nbsp;·&nbsp; project-takeover.com</div>
   </div>
 </body></html>`;

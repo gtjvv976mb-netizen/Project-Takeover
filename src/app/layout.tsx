@@ -21,7 +21,7 @@ export const viewport = {
   ],
 };
 
-const TITLE = "Project: Takeover — nobody trusts anybody, everybody gets paid";
+const TITLE = "Project: Takeover — you dream it, devs build it";
 const DESCRIPTION =
   "The home for Solana builders. Sell what you shipped, commission what you need built, and hire from people whose track record is on chain. Escrow holds the money until the work lands — so strangers can do business on day one.";
 
@@ -43,7 +43,7 @@ export const metadata: Metadata = {
     siteName: "Project: Takeover",
     title: TITLE,
     description: DESCRIPTION,
-    images: [{ url: "/brand/og.png", width: 1200, height: 630, alt: "Project: Takeover — nobody trusts anybody, everybody gets paid" }],
+    images: [{ url: "/brand/og.png", width: 1200, height: 630, alt: "Project: Takeover — you dream it, devs build it" }],
   },
   twitter: {
     card: "summary_large_image",

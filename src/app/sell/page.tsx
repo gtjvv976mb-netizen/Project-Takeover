@@ -7,7 +7,7 @@ import { createListingOnChain, escrowAuthorityOnChain } from "@/lib/client/progr
 import { useConfig } from "@/components/ConfigContext";
 import { Alert, Button, Field, inputCls, TokenAvatar } from "@/components/ui";
 import { CoverPicker } from "@/components/CoverPicker";
-import { MAX_UPLOAD_BYTES } from "@/lib/uploads-shared";
+import { prepareImage } from "@/lib/client/image";
 import { OFFCHAIN_CATEGORY_LABELS, shortKey, TYPE_LABELS, type AuthorityKind, type Listing, type ListingType, type OffchainAsset, type TokenInfo } from "@/lib/types";
 import { pumpControlOf } from "@/lib/solana-shared";
 
@@ -62,25 +62,27 @@ function Sell() {
    */
   const [image, setImage] = useState<string | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const [imageNote, setImageNote] = useState<string | null>(null);
 
   async function pickImage(file: File) {
-    setError(null);
-    if (file.size > MAX_UPLOAD_BYTES) {
-      setError(`That image is ${(file.size / 1024 / 1024).toFixed(1)} MB. The limit is 2 MB.`);
-      return;
-    }
+    setError(null); setImageError(null); setImageNote(null);
     // Show it straight away from the local file; the upload only decides whether it sticks.
     const local = URL.createObjectURL(file);
     setPreview(local);
     setBusy("Uploading the cover…");
     try {
-      const up = await uploadStagedImage(wallet, file);
+      // Shrink first rather than refusing: a photo off a phone is several megabytes and
+      // the seller should not have to know that, let alone go and fix it in another app.
+      const { file: ready, note } = await prepareImage(file);
+      const up = await uploadStagedImage(wallet, ready);
       setImage(up.image);
       setPreview(up.url);
+      setImageNote(note);
     } catch (e) {
       setImage(null);
       setPreview(null);
-      setError((e as Error).message);
+      setImageError((e as Error).message);
     } finally {
       URL.revokeObjectURL(local);
       setBusy(null);
@@ -268,9 +270,10 @@ function Sell() {
         </>
       )}
 
-      <Field label="Cover image" hint="Required. This is the picture on your card in the market and at the top of your listing — it is the whole of what somebody sees before they decide to click. Wide images look best; it is cropped to a letterbox.">
+      <Field label="Cover image" hint="Required. This is the picture on your card in the market and at the top of your listing — it is the whole of what somebody sees before they decide to click. Wide images look best; it is cropped to a letterbox. Large pictures are shrunk for you.">
         <CoverPicker preview={preview} busy={busy === "Uploading the cover…"} onPick={pickImage}
-          onClear={() => { setImage(null); setPreview(null); }} />
+          error={imageError} note={imageNote}
+          onClear={() => { setImage(null); setPreview(null); setImageError(null); setImageNote(null); }} />
       </Field>
 
       <Field label="Title"><input className={inputCls} value={title} onChange={(e) => setTitle(e.target.value)} maxLength={80} /></Field>

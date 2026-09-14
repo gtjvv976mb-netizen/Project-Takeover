@@ -15,6 +15,8 @@ export function CoverPicker({
   onPick,
   onClear,
   busy = false,
+  error = null,
+  note = null,
   aspect = "aspect-[21/9]",
   label = "Cover image",
 }: {
@@ -23,6 +25,14 @@ export function CoverPicker({
   onPick: (file: File) => void;
   onClear?: () => void;
   busy?: boolean;
+  /**
+   * Why the last attempt failed. Shown here rather than wherever the page keeps its
+   * errors: a seller who has just clicked this box is looking at this box, and an
+   * explanation somewhere further down the page reads as nothing having happened.
+   */
+  error?: string | null;
+  /** What was done to the picture on the way, when it was not sent untouched. */
+  note?: string | null;
   aspect?: string;
   label?: string;
 }) {
@@ -34,7 +44,7 @@ export function CoverPicker({
       <div
         className={`relative w-full overflow-hidden rounded-2xl border-2 border-dashed transition-colors ${aspect}`}
         style={{
-          borderColor: over ? "var(--color-brand)" : preview ? "var(--color-line)" : "color-mix(in srgb, var(--color-brand) 40%, var(--color-line))",
+          borderColor: error ? "var(--color-rose)" : over ? "var(--color-brand)" : preview ? "var(--color-line)" : "color-mix(in srgb, var(--color-brand) 40%, var(--color-line))",
           background: over ? "color-mix(in srgb, var(--color-brand) 8%, var(--color-tint-base))" : "var(--color-bg-2)",
         }}
         onDragOver={(e) => { e.preventDefault(); setOver(true); }}
@@ -87,6 +97,11 @@ export function CoverPicker({
           }}
         />
       </div>
+
+      {error && (
+        <p className="mt-2 text-[13px] font-semibold" style={{ color: "var(--color-rose)" }} role="alert">{error}</p>
+      )}
+      {!error && note && <p className="mt-2 text-[13px] text-faint">{note}</p>}
 
       {preview && onClear && (
         <button type="button" onClick={onClear} disabled={busy}
