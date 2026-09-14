@@ -3,7 +3,7 @@ import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { api, removeListingImage, signedPost, uploadListingImage, type DomainProofResult, type Handover } from "@/lib/client/api";
-import { buyTokenOnChain, cancelOnChain, disputeOnChain, fundOnChain, refundOnChain, releaseOnChain } from "@/lib/client/program";
+import { buyTokenOnChain, cancelOnChain, createListingOnChain, disputeOnChain, fundOnChain, refundOnChain, releaseOnChain } from "@/lib/client/program";
 import { explorerUrl, useConfig } from "@/components/ConfigContext";
 import { Alert, Button, Chip, inputCls, StatusBadge, TypeBadge } from "@/components/ui";
 import { CoverArt } from "@/components/CoverArt";
@@ -30,6 +30,12 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
   const [reportReason, setReportReason] = useState("");
   /** Deadline comes from the chain, not the index, so a stale row cannot hide a refund. */
   const [deadline, setDeadline] = useState<number | null>(null);
+  /**
+   * Whether the program actually has this listing. Null until the first sync answers.
+   * An absent account means one of two things — never opened, or opened and later closed
+   * to reclaim its rent — so it only means "not open" while the deal is still live.
+   */
+  const [onChain, setOnChain] = useState<boolean | null>(null);
   /** Ticks once a minute so the refund button appears the moment the window closes. */
   const [nowSec, setNowSec] = useState(() => Math.floor(Date.now() / 1000));
   useEffect(() => {
@@ -48,6 +54,7 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
     // refresh the authoritative state from the program itself
     try {
       const chain = await fetch(`/api/listings/${id}/sync`, { method: "POST" }).then((x) => x.json());
+      setOnChain(chain?.onChain === true);
       if (chain?.onChain) {
         setDeadline(chain.deadline || null);
         if (chain.listing) setL(chain.listing);
@@ -110,6 +117,8 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
     signedPost(wallet, `/api/listings/${l.id}/note`, "note", l.id, { note }));
 
   const pastDeadline = deadline !== null && nowSec >= deadline;
+  /** Only while the deal is still open: a settled listing is closed on purpose. */
+  const notOpened = onChain === false && (l.status === "draft" || l.status === "active");
 
   return (
     <div className="wrap py-10 grid gap-10 lg:grid-cols-[1fr_360px]">
@@ -231,8 +240,38 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
 
         {!me && <Alert kind="warn">Connect a wallet to buy or manage this listing.</Alert>}
 
+        {/* A listing whose account was never opened cannot be paid: `fund` and `buy_token`
+            both take an initialised account, so the buyer's wallet would simply reject it.
+            Say so instead of offering a button that cannot work. */}
+        {notOpened && (
+          <Alert kind="warn">
+            {isSeller ? (
+              <><strong>This listing is not open on chain yet, so nobody can buy it.</strong> One signature creates
+              the account a buyer&rsquo;s money goes into. Listings made before this step existed need it once.</>
+            ) : (
+              <><strong>Not open for purchase yet.</strong> The seller still has to open this listing&rsquo;s escrow
+              account on chain. Until they do there is nothing to pay into.</>
+            )}
+          </Alert>
+        )}
+        {notOpened && isSeller && l.type !== "token_authority" && (
+          <Button className="w-full" disabled={!!busy} onClick={() => run("Approve in your wallet…", async () => {
+            await createListingOnChain(connection, wallet, {
+              id: l.id, type: l.type, priceLamports: l.priceLamports,
+              authorities: [], mint: l.type === "pump_creator" ? l.mint ?? undefined : undefined,
+              deliveryDays: 14,
+            });
+            await sync();
+          })}>
+            {busy ?? "Open the escrow so people can buy"}
+          </Button>
+        )}
+        {notOpened && isSeller && l.type === "token_authority" && (
+          <Link href="/sell"><Button className="w-full" variant="secondary">Finish this on the Sell page</Button></Link>
+        )}
+
         {/* ----- buyer actions ----- */}
-        {me && l.status === "active" && !isSeller && (
+        {me && l.status === "active" && !isSeller && !notOpened && (
           <div className="space-y-2">
             <Button className="w-full" onClick={l.type === "token_authority" ? buy : fund} disabled={!!busy}>
               {busy ?? `Buy for ${formatSol(l.priceLamports)} SOL`}

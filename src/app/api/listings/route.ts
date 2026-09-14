@@ -76,7 +76,12 @@ export async function POST(req: Request) {
     const now = Date.now();
     const listing: Listing = {
       id: randomUUID().slice(0, 8), type, title: title.trim(), description: (description ?? "").trim(), priceLamports,
-      seller: signer, buyer: null, status: type === "token_authority" ? "draft" : "active", asset: cleanAsset, mint, token,
+      // Draft for every kind, not just token_authority. A row here is only an index
+      // entry; the program is what a buyer actually pays into, and `fund` needs the
+      // listing account to already exist. Marking a row active before the seller has
+      // opened it on chain advertised a listing whose purchase transaction could only
+      // fail. The sync route promotes it once the account is really there.
+      seller: signer, buyer: null, status: "draft", asset: cleanAsset, mint, token,
       escrowSig: null, paymentSig: null, settlementSig: null, deliveryNote: null, disputeReason: null, createdAt: now, updatedAt: now,
     };
     insertListing(listing);
