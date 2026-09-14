@@ -331,6 +331,19 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
           {/* The picker carries its own message; this branch has none, so it needs one. */}
           {coverError && <p className="mt-2 text-[13px] font-semibold" style={{ color: "var(--color-rose)" }} role="alert">{coverError}</p>}
           {!coverError && coverNote && <p className="mt-2 text-[13px] text-faint">{coverNote}</p>}
+
+          {/* Only the seller may put a picture on a listing, and until now the page said
+              so by simply not drawing the control — which reads, to the person who came
+              here to add one, as the upload being broken. Say whose listing it is, and
+              which wallet is looking at it, so the mismatch is visible rather than felt. */}
+          {!cover && !isSeller && (
+            <p className="mt-2 text-[13px] text-muted">
+              No cover yet — only this listing&rsquo;s seller can add one.{" "}
+              {me
+                ? <>You are connected as <span className="font-mono text-ink">{shortKey(me, 4)}</span>; the seller is <span className="font-mono text-ink">{shortKey(l.seller, 4)}</span>.</>
+                : <>Connect the seller&rsquo;s wallet (<span className="font-mono text-ink">{shortKey(l.seller, 4)}</span>) to add one.</>}
+            </p>
+          )}
         </div>
       )}
 
