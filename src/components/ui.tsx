@@ -101,7 +101,15 @@ export function ListingCard({ l }: { l: Listing }) {
       className="card card-hover group flex flex-col overflow-hidden"
       style={{ ["--accent" as string]: tint }}
     >
-      <CoverArt seed={l.id} image={t?.image} symbol={t?.symbol} banner={l.image ? `/api/uploads/${l.image}` : null} className="aspect-[16/10] w-full" />
+      {/* The card's own picture, at the card's own shape. Falls back to the banner for a
+          listing made before the two were separate, and to the coin's artwork for a token. */}
+      <CoverArt
+        seed={l.id}
+        image={t?.image}
+        symbol={t?.symbol}
+        banner={l.thumb ? `/api/uploads/${l.thumb}` : l.image ? `/api/uploads/${l.image}` : null}
+        className="aspect-[16/10] w-full"
+      />
 
       <div className="flex flex-1 flex-col gap-3 p-4">
         <div className="flex flex-wrap items-center gap-1.5">

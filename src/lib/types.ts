@@ -205,10 +205,17 @@ export interface Listing {
   deliveryNote: string | null;
   disputeReason: string | null;
   /**
-   * Stored banner, as the file's name on the service's disk. Served from
-   * /api/uploads/<image>. Null means the listing shows its generated artwork instead.
+   * The wide banner across the top of the listing's own page, as the file's name on the
+   * service's disk. Served from /api/uploads/<image>.
    */
   image?: string | null;
+  /**
+   * The picture on the card in the market, which is a different job and a different
+   * shape: a banner cropped to a card loses its middle, and a card image stretched to a
+   * banner is soft. Sellers supply both. Falls back to `image` where an older listing
+   * has only the one.
+   */
+  thumb?: string | null;
   createdAt: number;
   updatedAt: number;
 }

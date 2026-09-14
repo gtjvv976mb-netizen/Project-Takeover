@@ -5,7 +5,7 @@ import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { api, removeListingImage, signedPost, uploadListingImage, type DomainProofResult, type Handover } from "@/lib/client/api";
 import { buyTokenOnChain, cancelOnChain, createListingOnChain, disputeOnChain, fundOnChain, refundOnChain, releaseOnChain } from "@/lib/client/program";
 import { explorerUrl, useConfig } from "@/components/ConfigContext";
-import { Alert, Button, Chip, inputCls, StatusBadge, TypeBadge } from "@/components/ui";
+import { Alert, Button, Chip, inputCls, StatusBadge, TokenAvatar, TypeBadge } from "@/components/ui";
 import { CoverArt } from "@/components/CoverArt";
 import { CoverPicker } from "@/components/CoverPicker";
 import { prepareImage } from "@/lib/client/image";
@@ -216,12 +216,12 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
    * Put a picture on the listing. Shrunk in the browser first, so a photo straight off a
    * phone goes up instead of coming back as a size complaint the seller never sees.
    */
-  async function setCover(file: File) {
+  async function setCover(file: File, slot: "banner" | "thumb" = "banner") {
     setCoverError(null); setCoverNote(null); setError(null); setNotice(null);
-    setBusy("Uploading the cover…");
+    setBusy(slot === "thumb" ? "Uploading the card image…" : "Uploading the cover…");
     try {
       const { file: ready, note: how } = await prepareImage(file);
-      await uploadListingImage(wallet, l!.id, ready);
+      await uploadListingImage(wallet, l!.id, ready, slot);
       setCoverNote(how);
       await reload();
     } catch (e) {
@@ -240,6 +240,8 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
   const notOpened = onChain === false && (l.status === "draft" || l.status === "active");
   const atomic = l.type === "token_authority";
   const cover = l.image ? `/api/uploads/${l.image}` : null;
+  /** The card in the market has its own picture; an older listing falls back to the banner. */
+  const card = l.thumb ? `/api/uploads/${l.thumb}` : null;
 
   /* ---- where the deal has got to ---- */
   const live = !notOpened && (l.status === "active" || l.status === "paid" || l.status === "disputed" || settled);
@@ -357,7 +359,14 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
             ? <Chip tint="var(--color-green)">Domain verified</Chip>
             : <Chip tint="var(--color-amber)">Unverified seller</Chip>)}
         </div>
-        <h1 className="title-lg">{l.title}</h1>
+        {/* A coin is recognised by its artwork before its name, so a token listing wears
+            it beside the title rather than only inside the banner. */}
+        <div className="flex items-center gap-4">
+          {l.token && (l.token.image || l.token.symbol) && (
+            <TokenAvatar image={l.token.image} symbol={l.token.symbol} size={56} />
+          )}
+          <h1 className="title-lg">{l.title}</h1>
+        </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[13.5px] text-muted">
           <span className="flex items-center gap-2">Built by <BuilderChip wallet={l.seller} />{isSeller && <span className="text-faint">(you)</span>}</span>
           <span className="text-faint">Listed {new Date(l.createdAt).toLocaleDateString()}</span>
@@ -636,13 +645,25 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
                   </div>
                 )}
 
+                {/* Two pictures at two shapes. The banner is edited on the picture itself
+                    at the top of this page; the card is only ever seen in the market, so
+                    it is edited here, where a seller can see what they are changing. */}
+                <div className="space-y-3 border-t border-line pt-4">
+                  <div className="text-[13.5px] font-semibold text-ink">Card image</div>
+                  <p className="text-muted">What people see in the market. Shown at roughly 16:10.</p>
+                  <CoverPicker preview={card} aspect="aspect-[16/10]" label="card image"
+                    busy={busy === "Uploading the card image…"}
+                    onPick={(file) => setCover(file, "thumb")}
+                    onClear={card ? () => run("Removing…", () => removeListingImage(wallet, l.id, "thumb")) : undefined} />
+                </div>
+
                 {cover && (
                   <div className="space-y-2 border-t border-line pt-4">
-                    <div className="text-[13.5px] font-semibold text-ink">Cover image</div>
-                    <p className="text-muted">Use &ldquo;Change cover&rdquo; on the picture above to replace it.</p>
+                    <div className="text-[13.5px] font-semibold text-ink">Banner</div>
+                    <p className="text-muted">Use &ldquo;Change cover&rdquo; on the picture at the top of this page to replace it.</p>
                     <Button className="w-full" variant="secondary" disabled={!!busy}
-                      onClick={() => run("Removing…", () => removeListingImage(wallet, l.id))}>
-                      {busy ?? "Remove cover"}
+                      onClick={() => run("Removing…", () => removeListingImage(wallet, l.id, "banner"))}>
+                      {busy ?? "Remove banner"}
                     </Button>
                   </div>
                 )}

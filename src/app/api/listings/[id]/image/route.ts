@@ -1,17 +1,26 @@
 import { isAdmin, verifySigned } from "@/lib/auth";
 import { handleError, HttpError, json, readSigned, requireListing } from "@/lib/api-utils";
-import { imageRefCount, setListingImage } from "@/lib/db";
+import { imageRefCount, setListingImage, type ImageSlot } from "@/lib/db";
 import { ACCEPTED_LABEL, deleteImage, MAX_UPLOAD_BYTES, saveImage } from "@/lib/uploads";
 import type { SignedRequest } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 /**
- * The listing's banner.
+ * One of the listing's two pictures: the wide `banner` on its own page, or the `thumb`
+ * on its card in the market. They are different shapes doing different jobs, so they are
+ * stored and replaced separately.
  *
- * Only the seller may set one, and the signature is over this listing's id, so a
+ * Only the seller may set either, and the signature is over this listing's id, so a
  * signature collected for one listing cannot be replayed against another.
  */
+function slotOf(form: FormData): ImageSlot {
+  const raw = form.get("slot");
+  if (raw === "thumb") return "thumb";
+  // Anything else is the banner, which is what the only caller sent before this existed.
+  return "banner";
+}
+
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await ctx.params;
@@ -35,7 +44,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     try { auth = JSON.parse(authRaw) as SignedRequest; }
     catch { throw new HttpError(400, "Malformed signature"); }
     const signer = verifySigned(auth, "image", id).toBase58();
-    if (signer !== listing.seller) throw new HttpError(403, "Only the seller can change this listing's banner");
+    if (signer !== listing.seller) throw new HttpError(403, "Only the seller can change this listing's pictures");
 
     const file = form.get("file");
     if (!file || typeof file === "string") throw new HttpError(400, `Attach an image (${ACCEPTED_LABEL}).`);
@@ -44,32 +53,36 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     const saved = saveImage(Buffer.from(await file.arrayBuffer()));
     if (!saved.ok) throw new HttpError(400, saved.error);
 
-    const previous = listing.image;
-    setListingImage(id, saved.name);
+    const slot = slotOf(form);
+    const previous = slot === "thumb" ? listing.thumb : listing.image;
+    setListingImage(id, saved.name, slot);
     // Drop the old picture only once nothing else points at it: identical uploads share
-    // one file, so a second listing may still be using these exact bytes.
+    // one file, so another listing — or this listing's other slot — may still use these
+    // exact bytes.
     if (previous && previous !== saved.name && imageRefCount(previous) === 0) deleteImage(previous);
 
-    return json({ image: saved.name, url: `/api/uploads/${saved.name}`, bytes: saved.bytes });
+    return json({ slot, image: saved.name, url: `/api/uploads/${saved.name}`, bytes: saved.bytes });
   } catch (e) {
     return handleError(e);
   }
 }
 
-/** Remove the banner. The seller may; so may an admin, for a picture that should not be up. */
+/** Remove one picture. The seller may; so may an admin, for something that should not be up. */
 export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await ctx.params;
     const listing = requireListing(id);
-    const { signer } = await readSigned(req, "image", id);
+    const { body, signer } = await readSigned<{ slot?: string }>(req, "image", id);
     if (signer !== listing.seller && !isAdmin(signer)) {
-      throw new HttpError(403, "Only the seller can change this listing's banner");
+      throw new HttpError(403, "Only the seller can change this listing's pictures");
     }
-    if (listing.image) {
-      setListingImage(id, null);
-      if (imageRefCount(listing.image) === 0) deleteImage(listing.image);
+    const slot: ImageSlot = body.slot === "thumb" ? "thumb" : "banner";
+    const current = slot === "thumb" ? listing.thumb : listing.image;
+    if (current) {
+      setListingImage(id, null, slot);
+      if (imageRefCount(current) === 0) deleteImage(current);
     }
-    return json({ image: null });
+    return json({ slot, image: null });
   } catch (e) {
     return handleError(e);
   }
