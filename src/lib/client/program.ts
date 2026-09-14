@@ -5,7 +5,7 @@
  * cannot perform any of these on a user's behalf.
  */
 import { AnchorProvider, BN, Program, type Idl } from "@coral-xyz/anchor";
-import { PublicKey, SystemProgram, type Connection } from "@solana/web3.js";
+import { PublicKey, SystemProgram, Transaction, VersionedTransaction, type Connection } from "@solana/web3.js";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import type { WalletContextState } from "@solana/wallet-adapter-react";
 import {
@@ -23,6 +23,45 @@ import type { AuthorityKind, ListingType } from "@/lib/types";
 type OptionalAccounts = Record<string, PublicKey | null>;
 const accts = (o: OptionalAccounts) => o as never;
 
+/**
+ * Wait for a signature by asking, rather than by subscribing.
+ *
+ * Anchor confirms through `connection.confirmTransaction`, which opens a websocket and
+ * waits for a `signatureSubscribe` notification. Our RPC endpoint is an HTTP route on
+ * this site's own origin — there is no socket beside it — so that wait could only ever
+ * time out, leaving a transaction that had in fact landed looking like a failure.
+ *
+ * Polling `getSignatureStatuses` costs one small request a second and needs nothing but
+ * HTTP. The blockhash's own expiry decides when to give up, which is the same rule the
+ * cluster applies: past that height the transaction can no longer be accepted, so a
+ * signature that has not appeared never will.
+ */
+async function pollForConfirmation(
+  connection: Connection,
+  signature: string,
+  lastValidBlockHeight: number,
+): Promise<void> {
+  const started = Date.now();
+  for (;;) {
+    const { value } = await connection.getSignatureStatuses([signature]);
+    const status = value[0];
+    if (status) {
+      if (status.err) throw new Error(`The transaction failed on chain: ${JSON.stringify(status.err)}`);
+      if (status.confirmationStatus === "confirmed" || status.confirmationStatus === "finalized") return;
+    }
+    // Check expiry rather than trusting a clock: a stalled cluster should not look like
+    // a dropped transaction, and a fast one should not be waited on longer than it needs.
+    if (Date.now() - started > 5_000) {
+      const height = await connection.getBlockHeight("confirmed").catch(() => 0);
+      if (height > lastValidBlockHeight) {
+        throw new Error("The network did not pick this transaction up before it expired. Nothing was charged — try again.");
+      }
+    }
+    if (Date.now() - started > 120_000) throw new Error("Timed out waiting for the network to confirm. Check your wallet before retrying.");
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+}
+
 function programFor(connection: Connection, wallet: WalletContextState): Program<Idl> {
   if (!wallet.publicKey || !wallet.signTransaction) throw new Error("Connect a wallet first");
   const provider = new AnchorProvider(
@@ -34,6 +73,31 @@ function programFor(connection: Connection, wallet: WalletContextState): Program
     },
     { commitment: "confirmed" },
   );
+
+  /**
+   * Replaces Anchor's own, for the reason above. Everything else about the provider —
+   * which key signs, what the program does — is untouched; only the waiting changes.
+   */
+  provider.sendAndConfirm = async (tx, signers) => {
+    const latest = await connection.getLatestBlockhash("confirmed");
+    let signed: VersionedTransaction | Transaction;
+    if (tx instanceof VersionedTransaction) {
+      if (signers?.length) tx.sign(signers);
+      signed = await wallet.signTransaction!(tx);
+    } else {
+      tx.feePayer = tx.feePayer ?? wallet.publicKey!;
+      tx.recentBlockhash = latest.blockhash;
+      for (const s of signers ?? []) tx.partialSign(s);
+      signed = await wallet.signTransaction!(tx);
+    }
+    const signature = await connection.sendRawTransaction(signed.serialize(), {
+      preflightCommitment: "confirmed",
+      maxRetries: 3,
+    });
+    await pollForConfirmation(connection, signature, latest.lastValidBlockHeight);
+    return signature;
+  };
+
   return new Program(IDL as Idl, provider);
 }
 
