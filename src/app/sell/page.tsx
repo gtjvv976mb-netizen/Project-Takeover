@@ -1,6 +1,6 @@
 "use client";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { api, signedPost } from "@/lib/client/api";
 import { createListingOnChain, escrowAuthorityOnChain } from "@/lib/client/program";
@@ -11,23 +11,45 @@ import { pumpControlOf } from "@/lib/solana-shared";
 
 const AUTH_LABELS: Record<AuthorityKind, string> = { mint: "Mint authority (can mint new supply)", freeze: "Freeze authority (can freeze token accounts)", metadata_update: "Metadata update authority (name, symbol, image)" };
 
-export default function Sell() {
+/**
+ * Wrapped because `useSearchParams` suspends: an awarded developer arrives here from a
+ * request with the agreed price and deadline already in the URL, so the form is filled
+ * in for them rather than retyped from memory.
+ */
+export default function SellPage() {
+  return (
+    <Suspense fallback={<p className="wrap py-10 text-muted">Loading…</p>}>
+      <Sell />
+    </Suspense>
+  );
+}
+
+function Sell() {
   const wallet = useWallet();
+  const params = useSearchParams();
+  /** Set when this listing is the escrow for a commission that was awarded to them. */
+  const forRequest = params.get("request");
   const { connection } = useConnection();
   const cfg = useConfig();
   const router = useRouter();
   const me = wallet.publicKey?.toBase58();
 
-  const [type, setType] = useState<ListingType>("token_authority");
+  const [type, setType] = useState<ListingType>(forRequest ? "offchain" : "token_authority");
   const [mint, setMint] = useState("");
   const [token, setToken] = useState<TokenInfo | null>(null);
   const [authorities, setAuthorities] = useState<AuthorityKind[]>([]);
-  const [title, setTitle] = useState("");
+  const [title, setTitle] = useState(params.get("title") ?? "");
   const [description, setDescription] = useState("");
-  const [priceSol, setPriceSol] = useState("");
+  const [priceSol, setPriceSol] = useState(params.get("price") ?? "");
   const [category, setCategory] = useState<OffchainAsset["category"]>("project");
   const [links, setLinks] = useState("");
   const [deliverables, setDeliverables] = useState("");
+  /**
+   * The buyer's safety net: once they fund, the seller has this long to deliver, and
+   * after it the refund is permissionless. The program accepts 1 to 90 and this was
+   * never asked for, so every escrowed listing silently took the client default of 7.
+   */
+  const [deliveryDays, setDeliveryDays] = useState(Number(params.get("days")) || 14);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<Listing | null>(null);
@@ -54,15 +76,19 @@ export default function Sell() {
       const asset = type === "offchain"
         ? { category, links: links.split(/\s+/).filter(Boolean), deliverables }
         : type === "pump_creator" ? { mint: mint.trim() } : { mint: mint.trim(), authorities };
-      const l = await signedPost(wallet, "/api/listings", "create", null, { type, title, description, priceSol: Number(priceSol), asset });
+      const l = await signedPost(wallet, "/api/listings", "create", null, { type, title, description, priceSol: Number(priceSol), asset, requestId: forRequest ?? undefined });
       setCreated(l);
       if (l.status === "active") router.push(`/listings/${l.id}`);
     } catch (e) { setError((e as Error).message); } finally { setBusy(null); }
   }
 
   /**
-   * Open the listing on chain, then hand each authority to the program. Both are
-   * signed by the seller; the site never holds a key that could do this for them.
+   * Open the listing on chain, and for a token sale hand each authority to the program.
+   * Both are signed by the seller; the site never holds a key that could do this.
+   *
+   * Every kind goes through this, not only token sales. A buyer's `fund` and `buy_token`
+   * both take an initialised listing account, so a listing that was never opened here
+   * cannot be bought at all — it just fails in the buyer's wallet.
    */
   async function escrow() {
     if (!created) return;
@@ -71,7 +97,8 @@ export default function Sell() {
       setBusy("Approve the listing in your wallet…");
       await createListingOnChain(connection, wallet, {
         id: created.id, type: created.type, priceLamports: created.priceLamports,
-        authorities, mint: mint.trim(),
+        authorities, mint: created.type === "offchain" ? undefined : mint.trim(),
+        deliveryDays,
       });
       for (const [i, which] of authorities.entries()) {
         setBusy(`Handing over ${AUTH_LABELS[which].split(" (")[0]} (${i + 1}/${authorities.length})…`);
@@ -86,17 +113,35 @@ export default function Sell() {
   if (!me) return <p className="wrap py-10 text-muted">Connect your wallet to create a listing.</p>;
 
   if (created && created.status === "draft") {
+    const isToken = created.type === "token_authority";
     return (
       <div className="wrap py-10 max-w-3xl space-y-5">
-        <h1 className="text-2xl font-bold">Step 2 · Hand the controls to the program</h1>
+        <h1 className="text-2xl font-bold">
+          {isToken ? "Step 2 · Hand the controls to the program" : "Step 2 · Open the escrow"}
+        </h1>
         <p className="text-muted">
-          Your listing is saved. To go live, hand the selected authorities to the escrow program
-          <span className="font-mono text-xs"> {shortKey(cfg.programId, 6)}</span>. Nobody holds a key to it,
-          so no person can take them, and cancelling returns them to you at any time before a sale.
+          {isToken ? (
+            <>
+              Your listing is saved. To go live, hand the selected authorities to the escrow program
+              <span className="font-mono text-xs"> {shortKey(cfg.programId, 6)}</span>. Nobody holds a key to it,
+              so no person can take them, and cancelling returns them to you at any time before a sale.
+            </>
+          ) : (
+            <>
+              Your listing is saved here, but a buyer pays the escrow program
+              <span className="font-mono text-xs"> {shortKey(cfg.programId, 6)}</span>, not this site. One signature
+              opens the account their money will go into. Until you sign it there is nothing on chain to pay,
+              so the listing stays off the market.
+            </>
+          )}
         </p>
-        <ul className="list-disc pl-5 text-sm text-muted">{authorities.map((a) => <li key={a}>{AUTH_LABELS[a]}</li>)}</ul>
+        {isToken
+          ? <ul className="list-disc pl-5 text-sm text-muted">{authorities.map((a) => <li key={a}>{AUTH_LABELS[a]}</li>)}</ul>
+          : <p className="text-sm text-muted">Delivery window: <strong className="text-ink">{deliveryDays} days</strong> from the moment a buyer funds.</p>}
         {error && <Alert kind="error">{error}</Alert>}
-        <Button onClick={escrow} disabled={!!busy}>{busy ?? "Hand over & publish"}</Button>
+        <Button onClick={escrow} disabled={!!busy}>
+          {busy ?? (isToken ? "Hand over & publish" : "Open the escrow & publish")}
+        </Button>
       </div>
     );
   }
@@ -192,6 +237,13 @@ export default function Sell() {
 
       <Field label="Title"><input className={inputCls} value={title} onChange={(e) => setTitle(e.target.value)} maxLength={80} /></Field>
       <Field label="Description" hint="Buyers pay for proof: link the repo, the deployed site, the community, the numbers."><textarea className={inputCls} rows={5} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What you built, what works today, holders / volume / community size, and why you're handing it over…" /></Field>
+      {type !== "token_authority" && (
+        <Field label="Delivery window (days)" hint="Once a buyer funds, you have this long to hand the thing over. After it passes, anyone can return their money to them — including them. 1 to 90.">
+          <input className={inputCls} type="number" min={1} max={90} value={deliveryDays}
+            onChange={(e) => setDeliveryDays(Math.max(1, Math.min(90, Number(e.target.value) || 1)))} />
+        </Field>
+      )}
+
       <Field label="Price (SOL)" hint={`Platform fee ${cfg.feeBps / 100}% is deducted from your payout.`}>
         <input className={inputCls} type="number" min="0.01" step="0.01" value={priceSol} onChange={(e) => setPriceSol(e.target.value)} />
       </Field>

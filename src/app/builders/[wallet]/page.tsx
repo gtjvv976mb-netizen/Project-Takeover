@@ -2,12 +2,13 @@
 import { use, useEffect, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { signedPost } from "@/lib/client/api";
-import { shortKey, type BuilderProfile, type BuilderStats, type Listing } from "@/lib/types";
+import { shortKey, type BuilderProfile, type BuilderStats, type Listing, type Reputation, type Review } from "@/lib/types";
 import { Alert, Button, Field, inputCls, ListingCard } from "@/components/ui";
 import { StatTiles } from "@/components/Builder";
+import { ReputationPanel, ReviewList } from "@/components/Reputation";
 import { explorerUrl, useConfig } from "@/components/ConfigContext";
 
-type Data = { wallet: string; profile: BuilderProfile | null; stats: BuilderStats; listings: Listing[] };
+type Data = { wallet: string; profile: BuilderProfile | null; stats: BuilderStats; reputation: Reputation; reviews: Review[]; listings: Listing[] };
 
 export default function BuilderPage({ params }: { params: Promise<{ wallet: string }> }) {
   const { wallet } = use(params);
@@ -16,7 +17,7 @@ export default function BuilderPage({ params }: { params: Promise<{ wallet: stri
   const me = w.publicKey?.toBase58();
   const [data, setData] = useState<Data | null>(null);
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ name: "", bio: "", github: "", x: "", website: "" });
+  const [form, setForm] = useState({ name: "", bio: "", github: "", x: "", website: "", skills: "", openToWork: false });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -25,7 +26,7 @@ export default function BuilderPage({ params }: { params: Promise<{ wallet: stri
     fetch(`/api/builders/${wallet}`).then((r) => r.json()).then((d: Data) => {
       if (cancelled) return;
       setData(d);
-      if (d.profile) setForm({ name: d.profile.name, bio: d.profile.bio, github: d.profile.github, x: d.profile.x, website: d.profile.website });
+      if (d.profile) setForm({ name: d.profile.name, bio: d.profile.bio, github: d.profile.github, x: d.profile.x, website: d.profile.website, skills: (d.profile.skills ?? []).join(", "), openToWork: !!d.profile.openToWork });
     });
     return () => { cancelled = true; };
   }, [wallet]);
@@ -67,6 +68,15 @@ export default function BuilderPage({ params }: { params: Promise<{ wallet: stri
           <Field label="GitHub"><input className={inputCls} value={form.github} onChange={(e) => setForm({ ...form, github: e.target.value })} placeholder="https://github.com/you" /></Field>
           <Field label="X"><input className={inputCls} value={form.x} onChange={(e) => setForm({ ...form, x: e.target.value })} placeholder="https://x.com/you" /></Field>
           <div className="sm:col-span-2"><Field label="Bio" hint="What you build, what you've shipped, what you're looking for."><textarea className={inputCls} rows={4} value={form.bio} onChange={(e) => setForm({ ...form, bio: e.target.value })} maxLength={600} /></Field></div>
+          <div className="sm:col-span-2"><Field label="Skills" hint="Comma separated, up to 12. These are what the builders directory filters on — anchor, rust, next.js, telegram bots.">
+            <input className={inputCls} value={form.skills} onChange={(e) => setForm({ ...form, skills: e.target.value })} placeholder="anchor, rust, next.js, bots" />
+          </Field></div>
+          <div className="sm:col-span-2">
+            <label className="flex cursor-pointer items-center gap-2.5 text-[14px] text-ink">
+              <input type="checkbox" checked={form.openToWork} onChange={(e) => setForm({ ...form, openToWork: e.target.checked })} />
+              Open to work — show me to people looking for someone to build something
+            </label>
+          </div>
           {error && <div className="sm:col-span-2"><Alert kind="error">{error}</Alert></div>}
           <div className="sm:col-span-2"><Button onClick={save} disabled={busy}>{busy ? "Signing…" : "Save profile"}</Button></div>
         </section>
@@ -74,13 +84,20 @@ export default function BuilderPage({ params }: { params: Promise<{ wallet: stri
 
       <StatTiles stats={data.stats} />
 
+      {data.reputation && (
+        <div className="grid gap-5 lg:grid-cols-[320px_1fr] lg:items-start">
+          <ReputationPanel rep={data.reputation} />
+          <ReviewList reviews={data.reviews ?? []} />
+        </div>
+      )}
+
       <section>
         <h2 className="mb-3 text-lg font-semibold">On the market ({active.length})</h2>
         {active.length ? <div className="grid gap-4 md:grid-cols-2">{active.map((l) => <ListingCard key={l.id} l={l} />)}</div> : <p className="text-faint">Nothing listed right now.</p>}
       </section>
       {past.length > 0 && (
         <section>
-          <h2 className="mb-3 text-lg font-semibold">Track record ({past.length})</h2>
+          <h2 className="mb-3 text-lg font-semibold">Past listings ({past.length})</h2>
           <div className="grid gap-4 md:grid-cols-2">{past.map((l) => <ListingCard key={l.id} l={l} />)}</div>
         </section>
       )}

@@ -164,6 +164,10 @@ export interface BuilderProfile {
   github: string;
   x: string;
   website: string;
+  /** Free-form tags, lower-cased and de-duplicated. What they build, in their words. */
+  skills: string[];
+  /** Whether they want commissions right now. Directory sorts on it. */
+  openToWork: boolean;
   updatedAt: number;
 }
 
@@ -207,6 +211,175 @@ export interface Listing {
   image?: string | null;
   createdAt: number;
   updatedAt: number;
+}
+
+/* -------------------------------------------------------------- commissions */
+
+export type RequestCategory =
+  | "token" | "site" | "bot" | "contract" | "design" | "community" | "other";
+
+export const REQUEST_CATEGORY_LABELS: Record<RequestCategory, string> = {
+  token: "Token / coin launch",
+  site: "Website or web app",
+  bot: "Bot or automation",
+  contract: "Solana program",
+  design: "Design or branding",
+  community: "Community / growth",
+  other: "Something else",
+};
+
+export type RequestStatus = "open" | "awarded" | "cancelled";
+
+/**
+ * Work somebody wants built, posted before it exists.
+ *
+ * The mirror of a listing: a listing says "I made this, who wants it", a request says
+ * "I want this, who can make it". Both end in the same escrow — on an awarded request
+ * the developer becomes the seller, because they are the one delivering.
+ */
+export interface BuildRequest {
+  id: string;
+  poster: string;
+  title: string;
+  brief: string;
+  category: RequestCategory;
+  /** What the poster expects to pay. Indicative: the agreed price is the proposal's. */
+  budgetLamports: number;
+  /** How soon they want it. Also indicative. */
+  deliveryDays: number;
+  status: RequestStatus;
+  /** The developer whose proposal was accepted. */
+  awardedDev: string | null;
+  /** The escrow listing the award turned into, once the developer opens it. */
+  listingId: string | null;
+  proposalCount: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export type ProposalStatus = "open" | "accepted" | "withdrawn";
+
+/** A developer's answer to a request: what they would build, for how much, by when. */
+export interface Proposal {
+  id: number;
+  requestId: string;
+  dev: string;
+  pitch: string;
+  priceLamports: number;
+  deliveryDays: number;
+  status: ProposalStatus;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/* --------------------------------------------------------------- reputation */
+
+/**
+ * One side's word on how a deal went.
+ *
+ * A review cannot exist without a settled escrow behind it. Not "verified purchase" as a
+ * badge, but as the only way to write one: the API refuses unless the listing reached a
+ * terminal state on chain and the signer was one of its two parties. Since the program
+ * blocks a seller from buying their own listing, manufacturing a review means running two
+ * wallets and pushing real SOL through escrow — at the platform fee. Faking it is not
+ * impossible, it just costs money, which is the most an open system can honestly claim.
+ */
+export interface Review {
+  id: number;
+  listingId: string;
+  reviewer: string;
+  /** Who is being reviewed — the counterparty. */
+  subject: string;
+  /** The subject's role in that deal, so "delivered" and "paid" are not confused. */
+  role: "buyer" | "seller";
+  rating: number;
+  body: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** What a wallet's history adds up to. Every field traces to a settled deal. */
+export interface Reputation {
+  wallet: string;
+  /** Deals that settled with them delivering. */
+  soldCount: number;
+  /** Deals that settled with them paying. */
+  boughtCount: number;
+  /** Commissions won through a request and delivered. */
+  commissionsDelivered: number;
+  earnedLamports: number;
+  spentLamports: number;
+  /**
+   * Deals of theirs that ended with the buyer's money going back. The other half of a
+   * track record, and the half a seller would rather you did not see.
+   */
+  refundedAgainst: number;
+  disputedAgainst: number;
+  ratingCount: number;
+  /** Mean of every rating received, or null when nobody has rated them yet. */
+  averageRating: number | null;
+  firstDealAt: number | null;
+}
+
+/* -------------------------------------------------------------------- forum */
+
+export type Section = "hiring" | "offering" | "showcase" | "help" | "collab" | "general";
+
+export const SECTIONS: { id: Section; label: string; blurb: string; emoji: string }[] = [
+  { id: "hiring", label: "Asks", blurb: "Something you want built. Loose ideas welcome — a request with escrow is the formal version.", emoji: "🧰" },
+  { id: "offering", label: "For hire", blurb: "What you build, what you charge, what you have shipped.", emoji: "🛠️" },
+  { id: "showcase", label: "Shipped", blurb: "Something you made. Show the thing, not the roadmap.", emoji: "🚀" },
+  { id: "help", label: "Help", blurb: "Stuck on something. Anchor, pump.fun, RPCs, wallets.", emoji: "🆘" },
+  { id: "collab", label: "Collab", blurb: "Looking for someone to build alongside rather than pay.", emoji: "🤝" },
+  { id: "general", label: "General", blurb: "Everything else.", emoji: "💬" },
+];
+
+export const SECTION_LABELS = Object.fromEntries(SECTIONS.map((s) => [s.id, s.label])) as Record<Section, string>;
+
+export interface ForumPost {
+  id: string;
+  author: string;
+  section: Section;
+  title: string;
+  body: string;
+  score: number;
+  commentCount: number;
+  /** How the wallet reading this voted: 1, -1, or 0 for not at all. */
+  myVote: number;
+  removedAt: number | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface ForumComment {
+  id: number;
+  postId: string;
+  parentId: number | null;
+  author: string;
+  body: string;
+  score: number;
+  myVote: number;
+  removedAt: number | null;
+  createdAt: number;
+}
+
+/**
+ * What a wallet has actually done here, for the builders directory.
+ *
+ * Deals and SOL come from settled escrow, so they cannot be manufactured by talking.
+ * Posts and score come from the forum, where they can — which is why the two are
+ * counted separately and never added together into one number.
+ */
+export interface BuilderCard {
+  wallet: string;
+  profile: BuilderProfile | null;
+  stats: BuilderStats;
+  posts: number;
+  forumScore: number;
+  /** Commissions delivered through an awarded request. */
+  commissions: number;
+  reputation: Reputation;
+  lastSeen: number | null;
 }
 
 /** A report filed against a listing by someone who says it should not be there. */
