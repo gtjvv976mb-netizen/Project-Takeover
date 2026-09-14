@@ -173,7 +173,7 @@ function open() {
     CREATE INDEX IF NOT EXISTS idx_reviews_subject ON reviews(subject);
     CREATE INDEX IF NOT EXISTS idx_reviews_listing ON reviews(listing_id);
   `);
-  addColumns(db, "listings", { image: "TEXT" });
+  addColumns(db, "listings", { image: "TEXT", thumb: "TEXT" });
   addColumns(db, "builders", { skills: "TEXT", open_to_work: "INTEGER" });
   return db;
 }
@@ -223,44 +223,56 @@ function rowToListing(r: Row): Listing {
     deliveryNote: (r.delivery_note as string) ?? null,
     disputeReason: (r.dispute_reason as string) ?? null,
     image: (r.image as string) ?? null,
+    thumb: (r.thumb as string) ?? null,
     createdAt: Number(r.created_at),
     updatedAt: Number(r.updated_at),
   };
 }
 
-/** Point a listing at a stored banner, or clear it with null. */
-export function setListingImage(id: string, image: string | null) {
-  db().prepare("UPDATE listings SET image = ?, updated_at = ? WHERE id = ?").run(image, Date.now(), id);
+/** Which picture on a listing a write is about. */
+export type ImageSlot = "banner" | "thumb";
+const SLOT_COLUMN: Record<ImageSlot, string> = { banner: "image", thumb: "thumb" };
+
+/** Point a listing at a stored picture, or clear that slot with null. */
+export function setListingImage(id: string, image: string | null, slot: ImageSlot = "banner") {
+  // The column name comes from the map above and never from a caller, so this stays a
+  // fixed set of two statements rather than SQL assembled from input.
+  db().prepare(`UPDATE listings SET ${SLOT_COLUMN[slot]} = ?, updated_at = ? WHERE id = ?`)
+    .run(image, Date.now(), id);
 }
 
 /**
- * How many listings point at a stored file. Banners are content-addressed, so the same
- * bytes uploaded twice are one file with two referrers, and deleting one listing's
- * banner must not pull the picture out from under the other.
+ * How many listings point at a stored file, counting both slots. Pictures are
+ * content-addressed, so the same bytes uploaded twice are one file with two referrers —
+ * and one listing may well use the same picture as both its banner and its card. Dropping
+ * either must not pull the file out from under the other.
  */
 export function imageRefCount(image: string): number {
-  const r = db().prepare("SELECT COUNT(*) AS n FROM listings WHERE image = ?").get(image) as { n: number };
+  const r = db().prepare("SELECT COUNT(*) AS n FROM listings WHERE image = ? OR thumb = ?")
+    .get(image, image) as { n: number };
   return Number(r.n);
 }
 
-/** Every cover a listing still points at — what a sweep of the upload directory must keep. */
+/** Every picture a listing still points at — what a sweep of the upload directory must keep. */
 export function referencedImages(): Set<string> {
-  const rows = db().prepare("SELECT DISTINCT image FROM listings WHERE image IS NOT NULL").all() as Row[];
-  return new Set(rows.map((r) => String(r.image)));
+  const rows = db().prepare(
+    "SELECT image AS f FROM listings WHERE image IS NOT NULL UNION SELECT thumb FROM listings WHERE thumb IS NOT NULL"
+  ).all() as Row[];
+  return new Set(rows.map((r) => String(r.f)));
 }
 
 export function insertListing(l: Listing) {
   db()
     .prepare(
       `INSERT INTO listings (id,type,title,description,price_lamports,seller,buyer,status,asset_json,mint,token_json,
-        escrow_sig,payment_sig,settlement_sig,delivery_note,dispute_reason,image,created_at,updated_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+        escrow_sig,payment_sig,settlement_sig,delivery_note,dispute_reason,image,thumb,created_at,updated_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
     )
     .run(
       l.id, l.type, l.title, l.description, l.priceLamports, l.seller, l.buyer, l.status,
       JSON.stringify(l.asset), l.mint, l.token ? JSON.stringify(l.token) : null,
       l.escrowSig, l.paymentSig, l.settlementSig, l.deliveryNote, l.disputeReason,
-      l.image ?? null, l.createdAt, l.updatedAt
+      l.image ?? null, l.thumb ?? null, l.createdAt, l.updatedAt
     );
   addEvent(l.id, "created", { seller: l.seller, type: l.type });
 }

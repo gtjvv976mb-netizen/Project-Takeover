@@ -11,6 +11,10 @@ import { prepareImage } from "@/lib/client/image";
 import { OFFCHAIN_CATEGORY_LABELS, shortKey, TYPE_LABELS, type AuthorityKind, type Listing, type ListingType, type OffchainAsset, type TokenInfo } from "@/lib/types";
 import { pumpControlOf } from "@/lib/solana-shared";
 
+/** One staged picture: what was uploaded, what to show, and anything to say about it. */
+type Picked = { name: string | null; preview: string | null; error: string | null; note: string | null };
+const EMPTY: Picked = { name: null, preview: null, error: null, note: null };
+
 const AUTH_LABELS: Record<AuthorityKind, string> = { mint: "Mint authority (can mint new supply)", freeze: "Freeze authority (can freeze token accounts)", metadata_update: "Metadata update authority (name, symbol, image)" };
 
 /**
@@ -56,35 +60,63 @@ function Sell() {
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<Listing | null>(null);
   /**
-   * The cover, staged before the listing exists. Listings used to go up with nothing but
-   * generated artwork on them, which told a buyer nothing and made the market look empty;
-   * a picture is now required, and the server checks that too.
+   * Two pictures, staged before the listing exists, because they do two jobs at two
+   * shapes: the wide banner across the top of the listing's own page, and the card in the
+   * market, which is the only thing most people will ever see. A banner cropped into a
+   * card loses its middle. Both are required, and the server checks that too.
    */
-  const [image, setImage] = useState<string | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
-  const [imageError, setImageError] = useState<string | null>(null);
-  const [imageNote, setImageNote] = useState<string | null>(null);
+  const [banner, setBanner] = useState<Picked>(EMPTY);
+  const [thumb, setThumb] = useState<Picked>(EMPTY);
 
-  async function pickImage(file: File) {
-    setError(null); setImageError(null); setImageNote(null);
+  async function pick(which: "banner" | "thumb", file: File) {
+    const set = which === "banner" ? setBanner : setThumb;
+    setError(null);
     // Show it straight away from the local file; the upload only decides whether it sticks.
     const local = URL.createObjectURL(file);
-    setPreview(local);
-    setBusy("Uploading the cover…");
+    set({ name: null, preview: local, error: null, note: null });
+    setBusy(which === "banner" ? "Uploading the banner…" : "Uploading the card image…");
     try {
       // Shrink first rather than refusing: a photo off a phone is several megabytes and
       // the seller should not have to know that, let alone go and fix it in another app.
       const { file: ready, note } = await prepareImage(file);
       const up = await uploadStagedImage(wallet, ready);
-      setImage(up.image);
-      setPreview(up.url);
-      setImageNote(note);
+      set({ name: up.image, preview: up.url, error: null, note });
     } catch (e) {
-      setImage(null);
-      setPreview(null);
-      setImageError((e as Error).message);
+      set({ ...EMPTY, error: (e as Error).message });
     } finally {
       URL.revokeObjectURL(local);
+      setBusy(null);
+    }
+  }
+
+  /** Reuse a picture already staged, rather than making the seller find the file twice. */
+  const copyAcross = (to: "banner" | "thumb") => {
+    const from = to === "banner" ? thumb : banner;
+    if (!from.name) return;
+    (to === "banner" ? setBanner : setThumb)({ ...from, note: "Same picture as the other one." });
+  };
+
+  /**
+   * A coin already has artwork, and it is the picture buyers recognise. Offer it rather
+   * than asking somebody to save it off pump.fun and upload it back.
+   */
+  async function pullCoinArtwork(which: "banner" | "thumb") {
+    if (!token?.image) return;
+    setError(null);
+    setBusy("Fetching the coin artwork…");
+    try {
+      // Fetched by the browser: the picture lives on whatever gateway the coin's metadata
+      // names, and those refuse often enough that the failure has to be sayable.
+      const res = await fetch(token.image);
+      if (!res.ok) throw new Error(`The coin's artwork could not be fetched (${res.status}). Upload a picture instead.`);
+      const blob = await res.blob();
+      const asFile = new File([blob], "coin.png", { type: blob.type || "image/png" });
+      const { file: ready, note } = await prepareImage(asFile);
+      const up = await uploadStagedImage(wallet, ready);
+      (which === "banner" ? setBanner : setThumb)({ name: up.image, preview: up.url, error: null, note: note ?? "The coin's own artwork." });
+    } catch (e) {
+      (which === "banner" ? setBanner : setThumb)({ ...EMPTY, error: (e as Error).message });
+    } finally {
       setBusy(null);
     }
   }
@@ -111,7 +143,7 @@ function Sell() {
       const asset = type === "offchain"
         ? { category, links: links.split(/\s+/).filter(Boolean), deliverables }
         : type === "pump_creator" ? { mint: mint.trim() } : { mint: mint.trim(), authorities };
-      const l = await signedPost(wallet, "/api/listings", "create", null, { type, title, description, priceSol: Number(priceSol), asset, image, requestId: forRequest ?? undefined });
+      const l = await signedPost(wallet, "/api/listings", "create", null, { type, title, description, priceSol: Number(priceSol), asset, image: banner.name, thumb: thumb.name, requestId: forRequest ?? undefined });
       setCreated(l);
       if (l.status === "active") router.push(`/listings/${l.id}`);
     } catch (e) { setError((e as Error).message); } finally { setBusy(null); }
@@ -181,7 +213,7 @@ function Sell() {
     );
   }
 
-  const canSubmit = title && image && Number(priceSol) >= 0.01 && (type === "offchain" ? deliverables : token && (type === "pump_creator" ? pumpControlOf(token.pump?.control, me ?? "").full : authorities.length > 0 && token.extensions?.program !== "token-2022"));
+  const canSubmit = title && banner.name && thumb.name && Number(priceSol) >= 0.01 && (type === "offchain" ? deliverables : token && (type === "pump_creator" ? pumpControlOf(token.pump?.control, me ?? "").full : authorities.length > 0 && token.extensions?.program !== "token-2022"));
 
   return (
     <div className="wrap py-10 max-w-3xl space-y-6">
@@ -270,11 +302,39 @@ function Sell() {
         </>
       )}
 
-      <Field label="Cover image" hint="Required. This is the picture on your card in the market and at the top of your listing — it is the whole of what somebody sees before they decide to click. Wide images look best; it is cropped to a letterbox. Large pictures are shrunk for you.">
-        <CoverPicker preview={preview} busy={busy === "Uploading the cover…"} onPick={pickImage}
-          error={imageError} note={imageNote}
-          onClear={() => { setImage(null); setPreview(null); setImageError(null); setImageNote(null); }} />
-      </Field>
+      <div className="space-y-5">
+        <Field label="Card image" hint="Required. The picture on your card in the market — the whole of what somebody sees before deciding to click. Roughly landscape. Large pictures are shrunk for you.">
+          <CoverPicker preview={thumb.preview} aspect="aspect-[16/10]" label="card image"
+            busy={busy === "Uploading the card image…"} onPick={(f) => pick("thumb", f)}
+            error={thumb.error} note={thumb.note} onClear={() => setThumb(EMPTY)} />
+        </Field>
+        <div className="-mt-3 flex flex-wrap gap-3 text-[13px]">
+          {token?.image && (
+            <button type="button" className="text-muted underline underline-offset-2 hover:text-ink" disabled={!!busy}
+              onClick={() => pullCoinArtwork("thumb")}>Use the coin&rsquo;s artwork</button>
+          )}
+          {banner.name && !thumb.name && (
+            <button type="button" className="text-muted underline underline-offset-2 hover:text-ink" disabled={!!busy}
+              onClick={() => copyAcross("thumb")}>Use the banner here too</button>
+          )}
+        </div>
+
+        <Field label="Banner" hint="Required. The wide picture across the top of your listing's own page. A different shape from the card, so a different crop reads better.">
+          <CoverPicker preview={banner.preview} aspect="aspect-[21/9]" label="banner"
+            busy={busy === "Uploading the banner…"} onPick={(f) => pick("banner", f)}
+            error={banner.error} note={banner.note} onClear={() => setBanner(EMPTY)} />
+        </Field>
+        <div className="-mt-3 flex flex-wrap gap-3 text-[13px]">
+          {token?.image && (
+            <button type="button" className="text-muted underline underline-offset-2 hover:text-ink" disabled={!!busy}
+              onClick={() => pullCoinArtwork("banner")}>Use the coin&rsquo;s artwork</button>
+          )}
+          {thumb.name && !banner.name && (
+            <button type="button" className="text-muted underline underline-offset-2 hover:text-ink" disabled={!!busy}
+              onClick={() => copyAcross("banner")}>Use the card image here too</button>
+          )}
+        </div>
+      </div>
 
       <Field label="Title"><input className={inputCls} value={title} onChange={(e) => setTitle(e.target.value)} maxLength={80} /></Field>
       <Field label="Description" hint="Buyers pay for proof: link the repo, the deployed site, the community, the numbers."><textarea className={inputCls} rows={5} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What you built, what works today, holders / volume / community size, and why you're handing it over…" /></Field>
@@ -294,7 +354,7 @@ function Sell() {
           somebody. Name the one thing that is missing. */}
       {!canSubmit && !busy && (
         <p className="text-[13px] text-faint">
-          {!image ? "Add a cover image to continue." : !title ? "Give the listing a title." : Number(priceSol) < 0.01 ? "Set a price of at least 0.01 SOL." : "Fill in what the buyer receives."}
+          {!thumb.name ? "Add a card image to continue." : !banner.name ? "Add a banner to continue." : !title ? "Give the listing a title." : Number(priceSol) < 0.01 ? "Set a price of at least 0.01 SOL." : "Fill in what the buyer receives."}
         </p>
       )}
       <Button onClick={create} disabled={!canSubmit || !!busy}>{busy ?? (type === "token_authority" ? "Continue to escrow" : "Publish listing")}</Button>

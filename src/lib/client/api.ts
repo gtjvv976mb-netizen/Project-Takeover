@@ -47,13 +47,19 @@ export async function signedPost<T = Listing>(wallet: WalletContextState, url: s
  * multipart and the signature travels beside it as a form field. The browser sets the
  * multipart boundary itself, so no content-type header is passed here.
  */
-export async function uploadListingImage(wallet: WalletContextState, listingId: string, file: File) {
+export async function uploadListingImage(
+  wallet: WalletContextState,
+  listingId: string,
+  file: File,
+  slot: "banner" | "thumb" = "banner",
+) {
   const auth = await signAuth(wallet, "image", listingId);
   const form = new FormData();
   form.append("auth", JSON.stringify(auth));
+  form.append("slot", slot);
   form.append("file", file);
   const res = await fetch(`/api/listings/${listingId}/image`, { method: "POST", body: form });
-  return parse<{ image: string; url: string; bytes: number }>(res);
+  return parse<{ slot: string; image: string; url: string; bytes: number }>(res);
 }
 
 /**
@@ -70,14 +76,18 @@ export async function uploadStagedImage(wallet: WalletContextState, file: File) 
   return parse<{ image: string; url: string; bytes: number }>(res);
 }
 
-export async function removeListingImage(wallet: WalletContextState, listingId: string) {
+export async function removeListingImage(
+  wallet: WalletContextState,
+  listingId: string,
+  slot: "banner" | "thumb" = "banner",
+) {
   const auth = await signAuth(wallet, "image", listingId);
   const res = await fetch(`/api/listings/${listingId}/image`, {
     method: "DELETE",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ auth }),
+    body: JSON.stringify({ auth, slot }),
   });
-  return parse<{ image: null }>(res);
+  return parse<{ slot: string; image: null }>(res);
 }
 
 /** A signed request with no body to send — withdrawing something you posted. */

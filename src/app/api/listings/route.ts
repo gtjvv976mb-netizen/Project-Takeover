@@ -20,8 +20,8 @@ const VALID_AUTH: AuthorityKind[] = ["mint", "freeze", "metadata_update"];
 
 export async function POST(req: Request) {
   try {
-    const { body, signer } = await readSigned<{ type: ListingType; title: string; description: string; priceSol: number; asset: ListingAsset; requestId?: string; image?: string }>(req, "create", null);
-    const { type, title, description, priceSol, asset, requestId, image } = body;
+    const { body, signer } = await readSigned<{ type: ListingType; title: string; description: string; priceSol: number; asset: ListingAsset; requestId?: string; image?: string; thumb?: string }>(req, "create", null);
+    const { type, title, description, priceSol, asset, requestId, image, thumb } = body;
 
     // A listing can be the answer to a request somebody posted. Check that before
     // anything else is written, so an awarded developer cannot be raced to the escrow
@@ -41,16 +41,23 @@ export async function POST(req: Request) {
     const priceLamports = Math.round(Number(priceSol) * 1e9);
     if (!Number.isFinite(priceLamports) || priceLamports < 10_000_000) throw new HttpError(400, "Minimum price is 0.01 SOL");
 
-    // A cover is required, and required here rather than only in the form. Listings with
-    // no picture were the ones nobody clicked: a wall of blank cards tells a buyer nothing
-    // about which of them is a real project. The name must be one this service stored and
-    // the file must still be on the disk, so a made-up hash cannot buy a listing a cover.
-    if (!image || typeof image !== "string") {
-      throw new HttpError(400, "Every listing needs a cover image. Upload one before publishing.");
-    }
-    if (!isStoredName(image) || !imageExists(image)) {
-      throw new HttpError(400, "That cover image is not one we hold. Upload it again.");
-    }
+    // Pictures are required, and required here rather than only in the form. Listings with
+    // none were the ones nobody clicked: a wall of blank cards tells a buyer nothing about
+    // which of them is a real project. Each name must be one this service stored and the
+    // file must still be on the disk, so a made-up hash cannot buy a listing a picture.
+    const picture = (name: unknown, what: string) => {
+      if (!name || typeof name !== "string") {
+        throw new HttpError(400, `Every listing needs ${what}. Upload one before publishing.`);
+      }
+      if (!isStoredName(name) || !imageExists(name)) {
+        throw new HttpError(400, `That ${what} is not one we hold. Upload it again.`);
+      }
+      return name;
+    };
+    const bannerName = picture(image, "a banner image");
+    // The card is its own picture at its own shape. A seller who wants the same one in
+    // both places sends the same name twice, which costs one file either way.
+    const thumbName = picture(thumb ?? image, "a card image");
 
     let mint: string | null = null;
     let token = null;
@@ -106,7 +113,8 @@ export async function POST(req: Request) {
       // listing account to already exist. Marking a row active before the seller has
       // opened it on chain advertised a listing whose purchase transaction could only
       // fail. The sync route promotes it once the account is really there.
-      seller: signer, buyer: null, status: "draft", asset: cleanAsset, mint, token, image,
+      seller: signer, buyer: null, status: "draft", asset: cleanAsset, mint, token,
+      image: bannerName, thumb: thumbName,
       escrowSig: null, paymentSig: null, settlementSig: null, deliveryNote: null, disputeReason: null, createdAt: now, updatedAt: now,
     };
     insertListing(listing);
