@@ -42,6 +42,30 @@ export async function signedPost<T = Listing>(wallet: WalletContextState, url: s
   return parse<T>(res);
 }
 
+/**
+ * The banner upload is the one signed request that is not JSON: the file rides as
+ * multipart and the signature travels beside it as a form field. The browser sets the
+ * multipart boundary itself, so no content-type header is passed here.
+ */
+export async function uploadListingImage(wallet: WalletContextState, listingId: string, file: File) {
+  const auth = await signAuth(wallet, "image", listingId);
+  const form = new FormData();
+  form.append("auth", JSON.stringify(auth));
+  form.append("file", file);
+  const res = await fetch(`/api/listings/${listingId}/image`, { method: "POST", body: form });
+  return parse<{ image: string; url: string; bytes: number }>(res);
+}
+
+export async function removeListingImage(wallet: WalletContextState, listingId: string) {
+  const auth = await signAuth(wallet, "image", listingId);
+  const res = await fetch(`/api/listings/${listingId}/image`, {
+    method: "DELETE",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ auth }),
+  });
+  return parse<{ image: null }>(res);
+}
+
 export const api = {
   config: () => fetch("/api/config").then((r) => parse<AppConfig>(r)),
   token: (mint: string) => fetch(`/api/token/${mint}`).then((r) => parse<TokenDossier>(r)),

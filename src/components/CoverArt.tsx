@@ -38,12 +38,19 @@ export function CoverArt({
   seed,
   image,
   symbol,
+  banner,
   className = "",
   rounded = "rounded-t-[17px]",
 }: {
   seed: string;
   image?: string | null;
   symbol?: string | null;
+  /**
+   * A banner the seller uploaded. Unlike `image` — a token's own artwork, which sits
+   * inset on the engraving like a coin on a certificate — this is the seller's own
+   * picture for this listing, so it fills the frame and the engraving steps aside.
+   */
+  banner?: string | null;
   className?: string;
   rounded?: string;
 }) {
@@ -62,6 +69,18 @@ export function CoverArt({
     });
     return { ink, rings, angle: h % 360 };
   }, [seed]);
+
+  if (banner) {
+    return (
+      <div
+        className={`relative overflow-hidden ${rounded} ${className}`}
+        style={{ background: `color-mix(in srgb, ${art.ink} 7%, var(--color-surface))` }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={banner} alt="" className="absolute inset-0 h-full w-full object-cover" loading="lazy" />
+      </div>
+    );
+  }
 
   return (
     <div

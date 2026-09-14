@@ -97,7 +97,7 @@ export function ListingCard({ l }: { l: Listing }) {
       className="card card-hover group flex flex-col overflow-hidden"
       style={{ ["--accent" as string]: tint }}
     >
-      <CoverArt seed={l.id} image={t?.image} symbol={t?.symbol} className="aspect-[16/10] w-full" />
+      <CoverArt seed={l.id} image={t?.image} symbol={t?.symbol} banner={l.image ? `/api/uploads/${l.image}` : null} className="aspect-[16/10] w-full" />
 
       <div className="flex flex-1 flex-col gap-3 p-4">
         <div className="flex flex-wrap items-center gap-1.5">

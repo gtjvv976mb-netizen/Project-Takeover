@@ -2,7 +2,7 @@
 import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
-import { api, signedPost, type DomainProofResult, type Handover } from "@/lib/client/api";
+import { api, removeListingImage, signedPost, uploadListingImage, type DomainProofResult, type Handover } from "@/lib/client/api";
 import { buyTokenOnChain, cancelOnChain, disputeOnChain, fundOnChain, refundOnChain, releaseOnChain } from "@/lib/client/program";
 import { explorerUrl, useConfig } from "@/components/ConfigContext";
 import { Alert, Button, Chip, inputCls, StatusBadge, TypeBadge } from "@/components/ui";
@@ -115,7 +115,7 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
     <div className="wrap py-10 grid gap-10 lg:grid-cols-[1fr_360px]">
       <div className="space-y-8">
         <header>
-          <CoverArt seed={l.id} image={l.token?.image} symbol={l.token?.symbol} className="aspect-[21/9] w-full" rounded="rounded-2xl" />
+          <CoverArt seed={l.id} image={l.token?.image} symbol={l.token?.symbol} banner={l.image ? `/api/uploads/${l.image}` : null} className="aspect-[21/9] w-full" rounded="rounded-2xl" />
           <div className="mt-5 flex flex-wrap items-center gap-2">
             <TypeBadge type={l.type} />
             <StatusBadge status={l.status} />
@@ -285,6 +285,33 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
               })}>
               {busy ?? "Check my DNS record"}
             </Button>
+          </div>
+        )}
+        {isSeller && (
+          <div className="space-y-2 rounded-xl border border-line bg-bg-2 p-3">
+            <div className="text-sm font-semibold">Banner</div>
+            <p className="text-xs text-muted">
+              Your own picture at the top of this listing, in place of the generated artwork.
+              PNG, JPEG, WebP or GIF, up to 2 MB. Wide images look best — it is cropped to a letterbox.
+            </p>
+            <input
+              id="banner-file"
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              className="block w-full text-xs text-muted file:mr-3 file:rounded-lg file:border file:border-line file:bg-surface file:px-3 file:py-1.5 file:text-xs file:text-ink"
+              disabled={!!busy}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = ""; // so picking the same file twice still fires
+                if (file) run("Uploading…", () => uploadListingImage(wallet, l.id, file));
+              }}
+            />
+            {l.image && (
+              <Button className="w-full" variant="secondary" disabled={!!busy}
+                onClick={() => run("Removing…", () => removeListingImage(wallet, l.id))}>
+                {busy ?? "Remove banner"}
+              </Button>
+            )}
           </div>
         )}
         {isSeller && (l.status === "draft" || l.status === "active") && (
