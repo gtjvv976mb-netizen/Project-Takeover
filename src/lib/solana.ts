@@ -50,8 +50,17 @@ const httpOr = (value: string | undefined, fallback: string) =>
 export const NETWORK = (env("SOLANA_NETWORK") ?? "devnet") as AppConfig["network"];
 /** Server-side RPC. May carry an API key; never sent to the browser. */
 export const RPC_URL = httpOr(env("RPC_URL") ?? env("NEXT_PUBLIC_RPC_URL"), `https://api.${NETWORK}.solana.com`);
-/** Endpoint handed to wallets in the browser. Keep this one keyless / CORS-open. */
-export const BROWSER_RPC_URL = httpOr(env("NEXT_PUBLIC_RPC_URL"), `https://api.${NETWORK}.solana.com`);
+/**
+ * Endpoint handed to wallets in the browser. Keep this one keyless / CORS-open.
+ *
+ * The default is this site's own `/api/rpc`, which forwards to `RPC_URL` above. The
+ * public `api.<network>.solana.com` used to be the fallback and cannot be: it is not for
+ * production applications and answers a web page with `403 Access forbidden`, which took
+ * out every on-chain action. Relative on purpose — the browser resolves it against
+ * whatever origin it is on, so a preview deploy and a laptop both reach their own server
+ * rather than production's. See `resolveRpcUrl` for where that happens.
+ */
+export const BROWSER_RPC_URL = httpOr(env("NEXT_PUBLIC_RPC_URL"), "/api/rpc");
 /** Fallback only. The program's own config is authoritative — see `chainConfig()`. */
 const feeRaw = Number(env("FEE_BPS") ?? 500);
 export const FEE_BPS = Number.isFinite(feeRaw) && feeRaw >= 0 ? feeRaw : 500; // 5%, the program's hard ceiling
