@@ -35,7 +35,9 @@ export default function Sell() {
   async function lookup() {
     setError(null); setToken(null); setBusy("Looking up token…");
     try {
-      const t = await api.token(mint.trim());
+      // The route answers with a dossier; the mint's own state is the `token` inside it.
+      const { token: t } = await api.token(mint.trim());
+      if (!t) throw new Error("That mint could not be read from the chain.");
       setToken(t);
       if (!title) setTitle(t.name ? `${t.name} (${t.symbol})` : mint.trim());
       const held = (["mint", "freeze", "metadata_update"] as AuthorityKind[]).filter((k) => (k === "mint" ? t.mintAuthority : k === "freeze" ? t.freezeAuthority : t.updateAuthority) === me)
