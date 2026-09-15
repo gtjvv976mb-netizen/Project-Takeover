@@ -24,6 +24,7 @@ use anchor_lang::solana_program::{
 };
 use anchor_spl::token::spl_token::instruction::AuthorityType;
 use anchor_spl::token::{self, Mint, SetAuthority, Token};
+use anchor_spl::token_interface::Mint as MintInterface;
 
 pub mod errors;
 pub mod state;
@@ -816,7 +817,14 @@ pub struct CreateListing<'info> {
     #[account(mut)]
     pub seller: Signer<'info>,
     /// Required for token and pump listings, absent for off-chain ones.
-    pub mint: Option<Account<'info, Mint>>,
+    ///
+    /// An interface account, so a mint owned by either token program passes Anchor's
+    /// owner check. pump.fun mints its coins on Token-2022 now, and a pump listing only
+    /// records the mint's key — it escrows nothing through the token program — so there
+    /// was no reason for it to fail at the door with a generic "owned by wrong program".
+    /// A token-authority listing still insists on the legacy program, in its own branch,
+    /// with an error that says so.
+    pub mint: Option<InterfaceAccount<'info, MintInterface>>,
     pub system_program: Program<'info, System>,
 }
 

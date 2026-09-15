@@ -20,11 +20,12 @@ import { startAnchor, type ProgramTestContext, Clock } from "solana-bankrun";
 import {
   Keypair, PublicKey, SystemProgram, Transaction, LAMPORTS_PER_SOL,
 } from "@solana/web3.js";
-import { createInitializeMintInstruction, MINT_SIZE, TOKEN_PROGRAM_ID, unpackMint } from "@solana/spl-token";
+import { createInitializeMintInstruction, MINT_SIZE, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID, unpackMint } from "@solana/spl-token";
 import idl from "../target/idl/takeover_escrow.json" with { type: "json" };
 
 const AUTH_MINT = 1, AUTH_FREEZE = 2;
 const KIND_TOKEN = { tokenAuthority: {} };
+const KIND_PUMP = { pumpCreator: {} };
 const KIND_OFFCHAIN = { offchain: {} };
 const FEE_BPS = 200;
 
@@ -69,6 +70,26 @@ async function newMint(): Promise<PublicKey> {
       space: MINT_SIZE, lamports: MINT_RENT, programId: TOKEN_PROGRAM_ID,
     }),
     createInitializeMintInstruction(mint.publicKey, 6, seller.publicKey, seller.publicKey),
+  );
+  tx.recentBlockhash = ctx.lastBlockhash;
+  tx.feePayer = seller.publicKey;
+  tx.sign(seller, mint);
+  await ctx.banksClient.processTransaction(tx);
+  return mint.publicKey;
+}
+
+/**
+ * A mint owned by Token-2022, which is what pump.fun issues now. Same 82-byte base
+ * layout, different owning program — which is exactly the property under test.
+ */
+async function newMint2022(): Promise<PublicKey> {
+  const mint = Keypair.generate();
+  const tx = new Transaction().add(
+    SystemProgram.createAccount({
+      fromPubkey: seller.publicKey, newAccountPubkey: mint.publicKey,
+      space: MINT_SIZE, lamports: MINT_RENT, programId: TOKEN_2022_PROGRAM_ID,
+    }),
+    createInitializeMintInstruction(mint.publicKey, 6, seller.publicKey, seller.publicKey, TOKEN_2022_PROGRAM_ID),
   );
   tx.recentBlockhash = ctx.lastBlockhash;
   tx.feePayer = seller.publicKey;
@@ -537,6 +558,38 @@ describe("the config authority can be handed over, in two steps", () => {
         .accounts({ config: configPda, pending: pendingPda, newAuthority: buyer.publicKey })
         .signers([buyer]).rpc(),
       "AccountNotInitialized",
+    );
+  });
+});
+
+/**
+ * pump.fun moved its mints to Token-2022. A pump listing only records the mint's key —
+ * it escrows nothing through a token program — so the account check at the door must
+ * admit either program. A token-authority listing, which does move authorities through
+ * the legacy program, must still refuse Token-2022, and say why.
+ */
+describe("Token-2022 mints", () => {
+  it("can be listed as a pump.fun creator sale", async () => {
+    const id = idBytes("pump-2022");
+    const mint = await newMint2022();
+    const listing = listingPda(seller.publicKey, id);
+    await program.methods.createListing(id, KIND_PUMP, new BN(LAMPORTS_PER_SOL), 0, 7)
+      .accounts({ config: configPda, listing, seller: seller.publicKey, mint, systemProgram: SystemProgram.programId })
+      .signers([seller]).rpc();
+    const l = await program.account.listing.fetch(listing);
+    assert.equal(l.mint.toBase58(), mint.toBase58());
+    assert.deepEqual(l.status, { active: {} });
+  });
+
+  it("are still refused as token-authority sales, with the program's own reason", async () => {
+    const id = idBytes("tok-2022");
+    const mint = await newMint2022();
+    const listing = listingPda(seller.publicKey, id);
+    await expectFail(
+      program.methods.createListing(id, KIND_TOKEN, new BN(LAMPORTS_PER_SOL), AUTH_MINT, 7)
+        .accounts({ config: configPda, listing, seller: seller.publicKey, mint, systemProgram: SystemProgram.programId })
+        .signers([seller]).rpc(),
+      "UnsupportedTokenProgram",
     );
   });
 });

@@ -32,7 +32,7 @@ pub enum EscrowError {
     NotEscrowListing,
     #[msg("Mint does not match the one this listing was created for")]
     MintMismatch,
-    #[msg("Token-2022 mints are not supported yet")]
+    #[msg("Token-2022 mints cannot be listed as token authorities; list the coin's creator role instead")]
     UnsupportedTokenProgram,
     #[msg("Metadata account is not the canonical PDA for this mint")]
     BadMetadataAccount,
