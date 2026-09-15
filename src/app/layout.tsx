@@ -6,6 +6,7 @@ import { WalletProviders } from "@/components/WalletProviders";
 import { ConfigProvider } from "@/components/ConfigContext";
 import { Nav } from "@/components/Nav";
 import { DeploymentBanner } from "@/components/DeploymentBanner";
+import { PhoneHint } from "@/components/PhoneHint";
 import { SiteFooter } from "@/components/SiteFooter";
 import { THEME_SCRIPT } from "@/components/ThemeToggle";
 import { SITE_URL } from "@/lib/site";
@@ -19,6 +20,9 @@ export const viewport = {
     { media: "(prefers-color-scheme: light)", color: "#F6F7F9" },
     { media: "(prefers-color-scheme: dark)", color: "#0B0F17" },
   ],
+  // Installed to an iPhone's home screen the page runs edge to edge, under the notch and
+  // over the home indicator. This lets it, and the header pads itself by the safe area.
+  viewportFit: "cover" as const,
 };
 
 const TITLE = "Project: Takeover — you dream it, devs build it";
@@ -51,6 +55,18 @@ export const metadata: Metadata = {
     description: DESCRIPTION,
     images: ["/brand/og.png"],
   },
+  /**
+   * The home-screen app. `capable` is what makes iOS open the site full-screen from its
+   * icon rather than in Safari; the title is what sits under that icon, so it is the short
+   * name. The manifest (app/manifest.ts) carries the same for Android and desktop.
+   */
+  appleWebApp: {
+    capable: true,
+    title: "Takeover",
+    statusBarStyle: "black-translucent",
+  },
+  applicationName: "Project: Takeover",
+  formatDetection: { telephone: false },
 };
 export const dynamic = "force-dynamic";
 
@@ -70,6 +86,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <WalletProviders rpcUrl={config.rpcUrl}>
             <DeploymentBanner />
             <Nav />
+            <PhoneHint />
             <main>{children}</main>
             <SiteFooter config={config} />
           </WalletProviders>
