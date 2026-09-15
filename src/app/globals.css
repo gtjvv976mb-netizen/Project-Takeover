@@ -134,6 +134,16 @@
   body, .card, .input, .btn, .pill { transition: background-color 220ms var(--ease-soft), border-color 220ms var(--ease-soft), color 220ms var(--ease-soft); }
 }
 html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+/* Installed on a phone the page runs under the notch and over the home indicator; these
+   keep the header's controls and the footer's last line inside the screen's safe area. */
+header.sticky { padding-top: env(safe-area-inset-top); }
+footer { padding-bottom: env(safe-area-inset-bottom); }
+/* Standalone mode has no browser chrome, so the page's own chrome has to be reachable
+   with a thumb: a little more room around every tap target. */
+@media (display-mode: standalone) {
+  .btn { min-height: 44px; }
+  .input { min-height: 44px; }
+}
 body {
   background: var(--color-bg);
   color: var(--color-body);
