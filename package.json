@@ -13,7 +13,7 @@
     "start": "next start -p ${PORT:-3000}",
     "lint": "eslint",
     "program:build": "./scripts/build-program.sh",
-    "program:test": "npm run fixtures && tsx --test-concurrency=1 tests/escrow.test.ts && tsx --test-concurrency=1 tests/metadata.test.ts && tsx --test-concurrency=1 tests/offers.test.ts",
+    "program:test": "npm run fixtures && tsx --test-concurrency=1 tests/escrow.test.ts && tsx --test-concurrency=1 tests/metadata.test.ts && tsx --test-concurrency=1 tests/offers.test.ts && tsx --test-concurrency=1 tests/loader.test.ts",
     "test:unit": "tsx --test tests/pump.test.ts tests/domain-proof.test.ts tests/uploads.test.ts",
     "e2e:offers": "node scripts/e2e-offers.mjs",
     "prove": "node scripts/prove-handover.mjs",
