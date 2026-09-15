@@ -16,8 +16,8 @@ const mono = JetBrains_Mono({ subsets: ["latin"], weight: ["400", "500"], variab
 
 export const viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#FAF9FE" },
-    { media: "(prefers-color-scheme: dark)", color: "#0F0D24" },
+    { media: "(prefers-color-scheme: light)", color: "#F6F7F9" },
+    { media: "(prefers-color-scheme: dark)", color: "#0B0F17" },
   ],
 };
 

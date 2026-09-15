@@ -64,6 +64,16 @@ export default function RequestsPage() {
     return () => { off = true; };
   }, [status]);
 
+  // The front page and the footer link straight to "#post": somebody who clicked
+  // "Post a request" should land on the form, not on a list with a button above it.
+  // A hash rather than a query string, so this page needs no Suspense boundary.
+  useEffect(() => {
+    // The hash is external state the server cannot see, so it cannot be a lazy initial
+    // value without a hydration mismatch; reading it once after mount is the honest way.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (window.location.hash === "#post") setPosting(true);
+  }, []);
+
   async function post() {
     setError(null); setBusy("Sign to post…");
     try {
@@ -94,7 +104,7 @@ export default function RequestsPage() {
       {!me && <Alert kind="info">Connect a wallet to post a request or send a proposal. Reading needs nothing.</Alert>}
 
       {posting && (
-        <div className="card space-y-4 p-5">
+        <div id="post" className="card scroll-mt-24 space-y-4 p-5">
           <h2 className="text-[19px] font-bold text-ink">What do you want built?</h2>
           <Field label="One line">
             <input className={inputCls} value={title} maxLength={90} onChange={(e) => setTitle(e.target.value)}
@@ -134,12 +144,9 @@ export default function RequestsPage() {
       )}
 
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex rounded-xl border border-line bg-surface p-1">
+        <div className="seg">
           {([["open", "Taking proposals"], ["awarded", "Awarded"], ["all", "Everything"]] as const).map(([v, label]) => (
-            <button key={v} onClick={() => setStatus(v)}
-              className={`rounded-lg px-3 py-1.5 text-[13px] font-semibold transition-colors ${status === v ? "bg-brand text-white" : "text-muted hover:text-ink"}`}>
-              {label}
-            </button>
+            <button key={v} onClick={() => setStatus(v)} aria-pressed={status === v}>{label}</button>
           ))}
         </div>
         {rows && <span className="kicker">{rows.length} {rows.length === 1 ? "request" : "requests"}</span>}
