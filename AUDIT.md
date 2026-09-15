@@ -221,7 +221,11 @@ resolve would let the indexer follow the chain instead of interrogating it.
   so the marketplace cannot raise its own fee above 5% even if it wants to.
 - **PDA derivation.** All seeds are canonical and all bumps stored and reused; no
   user-supplied bumps anywhere.
-- **Token-2022.** Explicitly rejected at listing rather than half-supported.
+- **Token-2022.** Explicitly rejected for token-authority listings rather than
+  half-supported: `create_listing` checks the mint's owner in that branch and fails
+  with `UnsupportedTokenProgram`. A pump.fun listing accepts a mint from either
+  token program — it records the key and escrows nothing through the token program —
+  because pump.fun now mints on Token-2022.
 - **Metaplex PDA.** `verify_metadata_pda` checks the metadata account is the canonical
   derivation for the mint before any authority is moved.
 
