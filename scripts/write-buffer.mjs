@@ -4,8 +4,11 @@
  *   node scripts/write-buffer.mjs target/deploy/takeover_escrow.so --vault <SQUADS_VAULT> --dry-run
  *   node scripts/write-buffer.mjs target/deploy/takeover_escrow.so --vault <SQUADS_VAULT> --yes
  *
- * Paid for and signed by PAYER (a keypair file; defaults to ~/.config/solana/id.json),
- * against RPC_URL (defaults to mainnet's public endpoint, which is fine from a machine
+ * Paid for and signed by a funded wallet, given one of two ways: PAYER_SECRET, the
+ * private key as Phantom exports it (a base58 string — Settings → Manage accounts →
+ * Show private key), or PAYER, a keypair file in the Solana CLI's JSON format. Use a
+ * fresh wallet holding only what this costs; the key passes through a terminal.
+ * Against RPC_URL (defaults to mainnet's public endpoint, which is fine from a machine
  * but slow; a provider URL is better). Nothing here needs the Solana CLI.
  *
  * An upgrade through Squads has two halves. The multisig can only point the program at
@@ -26,6 +29,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import crypto from "node:crypto";
+import bs58 from "bs58";
 import { Connection, Keypair, PublicKey, SystemProgram, Transaction, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { BPF_LOADER, BUFFER_HEADER, initializeBufferIx, setAuthorityIx, writeIx } from "./loader-ix.mjs";
 
@@ -40,7 +44,7 @@ const flag = (name) => argv.includes(`--${name}`);
 const soPath = argv.find((a) => !a.startsWith("--") && a.endsWith(".so"));
 const die = (m) => { console.error(`error: ${m}`); process.exit(1); };
 
-if (!soPath) die("usage: node scripts/write-buffer.mjs <program.so> --vault <SQUADS_VAULT> [--rpc URL] [--keypair FILE] [--buffer FILE] [--dry-run] [--yes]");
+if (!soPath) die("usage: PAYER_SECRET=<base58> node scripts/write-buffer.mjs <program.so> --vault <SQUADS_VAULT> [--rpc URL] [--keypair FILE] [--buffer FILE] [--dry-run] [--yes]");
 if (!fs.existsSync(soPath)) die(`no such file: ${soPath}`);
 const vaultRaw = arg("vault");
 if (!vaultRaw) die("--vault <SQUADS_VAULT> is required: the buffer's authority is handed to it at the end");
@@ -55,6 +59,27 @@ const program = fs.readFileSync(soPath);
 const sha = crypto.createHash("sha256").update(program).digest("hex");
 const space = BUFFER_HEADER + program.length;
 const chunks = Math.ceil(program.length / CHUNK);
+
+/**
+ * The paying wallet. A Phantom export is a base58 string of the 64-byte secret key; the
+ * Solana CLI writes the same 64 bytes as a JSON array. Either is accepted, from the
+ * environment or a file, so nobody has to convert one into the other by hand.
+ */
+function loadPayer() {
+  const fromEnv = process.env.PAYER_SECRET?.trim();
+  if (fromEnv) return keypairFrom(fromEnv, "PAYER_SECRET");
+  if (!fs.existsSync(keyPath)) die("no funded wallet given — set PAYER_SECRET to the private key Phantom exports, or PAYER / --keypair to a keypair file");
+  return keypairFrom(fs.readFileSync(keyPath, "utf8").trim(), keyPath);
+}
+function keypairFrom(text, label) {
+  try {
+    const bytes = text.startsWith("[") ? Uint8Array.from(JSON.parse(text)) : bs58.decode(text);
+    if (bytes.length !== 64) throw new Error(`expected 64 bytes, got ${bytes.length}`);
+    return Keypair.fromSecretKey(bytes);
+  } catch (e) {
+    die(`${label} is not a private key I can read (${e.message}). Phantom's export is a long base58 string; the CLI's is a JSON array.`);
+  }
+}
 
 /* ------------------------------------------------------------------ sending */
 
@@ -105,8 +130,7 @@ console.log(`network   ${network} via ${RPC.replace(/\?api-key=.*/, "?api-key=**
 if (flag("dry-run")) { console.log("\n--dry-run: nothing sent"); process.exit(0); }
 if (!flag("yes")) { console.log("\nre-run with --yes to send."); process.exit(0); }
 
-if (!fs.existsSync(keyPath)) die(`no keypair at ${keyPath} — set PAYER or --keypair to a funded key`);
-const payer = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(keyPath, "utf8"))));
+const payer = loadPayer();
 const balance = await conn.getBalance(payer.publicKey);
 console.log(`payer     ${payer.publicKey.toBase58()}  ${(balance / LAMPORTS_PER_SOL).toFixed(4)} SOL`);
 if (balance < rent + fees) die(`the payer needs about ${((rent + fees) / LAMPORTS_PER_SOL).toFixed(3)} SOL and has ${(balance / LAMPORTS_PER_SOL).toFixed(3)}`);
