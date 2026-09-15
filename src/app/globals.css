@@ -1,67 +1,75 @@
 @import "tailwindcss";
 
-/* ---------- Project: Takeover — a warm shopfront ----------
-   The old skin was a banknote: hard offset shadows, engraved rosettes, wide
-   monospace capitals. Precise, and about as welcoming as a bank counter.
+/* ---------- Project: Takeover — the workshop ----------
+   Two kinds of people come here and they want different things from a screen.
+   Developers want density, proof and no ceremony: the sites they already live in
+   (GitHub, Linear, Vercel) are cool-neutral, precise, and dark by default. People
+   hiring them want to know where to start and that their money is safe, and they
+   are put off by anything that looks like a terminal.
 
-   This one keeps the warmth of paper and spends the craft on softness instead:
-   diffused shadows the colour of the ground rather than black bars behind every
-   box, rounder corners, and a dark theme that is warm cocoa rather than the
-   near-black everything else on a Solana screen already is.
+   So the skin is a studio rather than a stationery shop. A cool neutral ground
+   that reads as a tool, not a brochure; one warm action colour — builder orange,
+   the colour of a thing being made — so every "do this" on the page is the same
+   colour and nothing else is; green reserved for money and escrow, because that
+   is the one place a buyer needs reassurance at a glance; blue for anything read
+   from the chain. Generous radii and soft shadows keep it welcoming.
 
    Every colour is a token and every component reads one, so the two themes stay
    in step and a component never hard-codes a value that only works in one.  */
 
 @theme {
-  /* ---- ground & surfaces ----
-     Paper, not white. The surface sits a shade above the ground rather than
-     jumping to #FFF, which on a cream ground reads clinical and cold. */
-  --color-bg:        #FBF7F0; /* warm paper */
-  --color-bg-2:      #F3EDE3; /* recessed wells, inputs */
-  --color-surface:   #FFFCF7; /* cards — warm white, never pure white */
-  --color-line:      #EBE2D4; /* hairlines and card borders */
-  --color-line-2:    #DBD0BE; /* stronger dividers */
+  /* ---- ground & surfaces ---- */
+  --color-bg:        #F6F7F9; /* studio wall: cool, quiet, not white */
+  --color-bg-2:      #EDEFF3; /* recessed wells, inputs, alt bands */
+  --color-surface:   #FFFFFF; /* cards lift to true white on this ground */
+  --color-line:      #E4E7ED; /* hairlines and card borders */
+  --color-line-2:    #CCD2DC; /* stronger dividers, input borders */
 
   /* ---- text ---- */
-  --color-ink:       #2A231C; /* headings — warm near-black, never #000 */
-  --color-body:      #52483C; /* paragraph text */
-  --color-muted:     #6B6053; /* secondary */
-  --color-faint:     #8F8475; /* meta, timestamps */
+  --color-ink:       #131A2B; /* headings — deep navy-black, never #000 */
+  --color-body:      #3B4658;
+  --color-muted:     #5F6C82;
+  --color-faint:     #8B97AB;
 
-  /* ---- brand & categories ----
-     Violet stays the action colour — it is the mark, the token art and the
-     banner — but everything around it is warmed, and honey joins as the second
-     voice so the palette is not one cool note on cream. */
+  /* ---- the one action colour ----
+     Orange is the colour of something being built. It is the button, the link
+     hover, the active tab — and nothing else is orange, so the eye learns it. */
   --color-on-tint:   #FFFFFF;
-  --color-brand:     #6B4BE8; /* primary action */
-  --color-brand-2:   #A78BFA; /* lighter brand, gradients */
-  --color-violet:    #6B4BE8; /* token authorities */
-  --color-tangerine: #D2582B; /* pump.fun ownership */
-  --color-teal:      #147F75; /* projects, sites & socials */
-  --color-blue:      #2C6ECB; /* verified / read from chain */
-  --color-amber:     #B87514; /* SOL amounts, money in escrow */
-  --color-honey:     #E0A33E; /* warm highlight — welcomes, empty states */
-  --color-rose:      #CE3257; /* disputes, danger */
-  --color-green:     #157A48; /* live, for sale */
+  --color-brand:     #E8590C;
+  --color-brand-2:   #FD7E14;
+
+  /* ---- what things are ----
+     Three kinds of listing, three hues, none of them the action colour. */
+  --color-violet:    #5F5FD8; /* token authorities */
+  --color-tangerine: #5C940D; /* pump.fun coins — a nod to pump's own green */
+  --color-teal:      #0B7A8A; /* projects, sites, communities */
+
+  /* ---- what things mean ---- */
+  --color-blue:      #1971C2; /* read from the chain, verified */
+  --color-green:     #0F9D6C; /* money in escrow, live, settled — safe */
+  --color-amber:     #C77700; /* SOL amounts */
+  --color-honey:     #F0B33D; /* welcomes, empty states */
+  --color-rose:      #D6336C; /* disputes, danger */
 
   /* Every tint mixes toward this rather than literal white, so one expression
      stays legible when the ground goes dark. */
-  --color-tint-base: #FFFCF7;
+  --color-tint-base: #FFFFFF;
 
-  /* ---- depth ----
-     Soft and warm. A shadow here is the ground gathering under an object, not a
-     black bar stuck behind it, so nothing looks pasted on. */
-  --shadow-card:  0 1px 2px rgba(74, 58, 38, .05), 0 6px 18px -10px rgba(74, 58, 38, .22);
-  --shadow-lift:  0 2px 6px rgba(74, 58, 38, .07), 0 18px 38px -16px color-mix(in srgb, var(--accent, var(--color-brand)) 40%, rgba(74, 58, 38, .3));
-  --shadow-soft:  0 1px 3px rgba(74, 58, 38, .06);
-  --shadow-inset: inset 0 1px 0 rgba(255, 255, 255, .6);
-  --sheen: rgba(255,255,255,.85);
+  /* ---- depth ---- */
+  --shadow-card:  0 1px 2px rgba(19, 26, 43, .05), 0 6px 16px -10px rgba(19, 26, 43, .18);
+  --shadow-lift:  0 2px 6px rgba(19, 26, 43, .07), 0 18px 36px -16px color-mix(in srgb, var(--accent, var(--color-brand)) 38%, rgba(19, 26, 43, .28));
+  --shadow-soft:  0 1px 2px rgba(19, 26, 43, .06);
+  --shadow-inset: inset 0 1px 0 rgba(255, 255, 255, .7);
+  --sheen: rgba(255,255,255,.9);
 
-  --hero-scrim: linear-gradient(to bottom, rgba(251,247,240,.30), rgba(251,247,240,.72), var(--color-bg));
+  /* the blueprint behind the hero */
+  --grid-line: rgba(19, 26, 43, .075);
+  --hero-glow-1: color-mix(in srgb, var(--color-brand) 22%, transparent);
+  --hero-glow-2: color-mix(in srgb, var(--color-teal) 18%, transparent);
 
   /* ---- shape ---- */
-  --r-card: 22px;
-  --r-ctl:  14px;
+  --r-card: 18px;
+  --r-ctl:  12px;
 
   /* ---- type ---- */
   --font-display: var(--font-display-face), ui-sans-serif, system-ui, sans-serif;
@@ -79,45 +87,46 @@
 :root { color-scheme: light; }
 
 /* ---------- dark ----------
-   Warm cocoa rather than the near-black every other Solana site defaults to.
-   The surface lifts clearly off the ground so cards still read as objects
-   without needing a hard border, and the text is cream rather than white. */
+   The default for most of the people this is for. Deep slate rather than pure
+   black, so cards can still lift off it; text is off-white rather than white.
+   The accents are lifted a step — the light values go muddy on a dark ground. */
 :root[data-theme="dark"] {
   color-scheme: dark;
 
-  --color-bg:        #1E1714;
-  --color-bg-2:      #271F1A;
-  --color-surface:   #2C231D;
-  --color-line:      #3D3129;
-  --color-line-2:    #524337;
+  --color-bg:        #0B0F17;
+  --color-bg-2:      #111725;
+  --color-surface:   #151C2B;
+  --color-line:      #232D40;
+  --color-line-2:    #34415A;
 
-  --color-ink:       #F8F2E8;
-  --color-body:      #DCD1C1;
-  --color-muted:     #B9AC99;
-  --color-faint:     #938878;
+  --color-ink:       #F2F5FA;
+  --color-body:      #C6CFDD;
+  --color-muted:     #94A1B8;
+  --color-faint:     #67748C;
 
-  /* lifted: the light-theme values go muddy on a dark ground */
-  --color-brand:     #A78BFA;
-  --color-brand-2:   #C4B2FF;
-  --color-violet:    #A78BFA;
-  --color-tangerine: #F28B5D;
-  --color-teal:      #4FC8BA;
-  --color-blue:      #7EAEFF;
-  --color-amber:     #F0BA5C;
-  --color-honey:     #F0BA5C;
-  --color-rose:      #FF7593;
-  --color-green:     #5AC98D;
+  --color-brand:     #FF922B;
+  --color-brand-2:   #FFA94D;
+  --color-violet:    #91A7FF;
+  --color-tangerine: #A9E34B;
+  --color-teal:      #3BC9DB;
+  --color-blue:      #74C0FC;
+  --color-green:     #51CF66;
+  --color-amber:     #FFC078;
+  --color-honey:     #FFD43B;
+  --color-rose:      #FF8FAB;
 
-  --color-on-tint:   #1E1714;
-  --color-tint-base: #33291F;
+  --color-on-tint:   #0B0F17;
+  --color-tint-base: #1A2233;
 
-  --shadow-card:  0 1px 2px rgba(0,0,0,.34), 0 8px 22px -12px rgba(0,0,0,.6);
-  --shadow-lift:  0 2px 8px rgba(0,0,0,.4), 0 20px 40px -18px color-mix(in srgb, var(--accent, var(--color-brand)) 45%, rgba(0,0,0,.7));
-  --shadow-soft:  0 1px 3px rgba(0,0,0,.3);
+  --shadow-card:  0 1px 2px rgba(0,0,0,.4), 0 8px 22px -12px rgba(0,0,0,.65);
+  --shadow-lift:  0 2px 8px rgba(0,0,0,.45), 0 20px 40px -18px color-mix(in srgb, var(--accent, var(--color-brand)) 45%, rgba(0,0,0,.7));
+  --shadow-soft:  0 1px 3px rgba(0,0,0,.35);
   --shadow-inset: inset 0 1px 0 rgba(255,255,255,.05);
   --sheen: rgba(255,255,255,.07);
 
-  --hero-scrim: linear-gradient(to bottom, rgba(30,23,20,.24), rgba(30,23,20,.66), var(--color-bg));
+  --grid-line: rgba(242, 245, 250, .06);
+  --hero-glow-1: color-mix(in srgb, var(--color-brand) 20%, transparent);
+  --hero-glow-2: color-mix(in srgb, var(--color-teal) 16%, transparent);
 }
 
 /* Theme swaps repaint the whole page; without this the ground snaps and the cards lag. */
@@ -134,31 +143,29 @@ body {
   min-height: 100svh;
   -webkit-font-smoothing: antialiased;
 }
-::selection { background: color-mix(in srgb, var(--color-brand) 22%, transparent); color: var(--color-ink); }
+::selection { background: color-mix(in srgb, var(--color-brand) 24%, transparent); color: var(--color-ink); }
 
 @layer base {
   h1, h2, h3 { color: var(--color-ink); font-family: var(--font-display); letter-spacing: -.022em; }
-  h1 { font-weight: 700; line-height: 1.06; }
+  h1 { font-weight: 800; line-height: 1.04; }
   h2 { font-weight: 700; line-height: 1.14; }
-  h3 { font-weight: 600; line-height: 1.3; }
-  /* A shade smaller than before. The old display size shouted across the room; this
-     one talks to someone standing in front of it. */
-  .display  { font: 700 clamp(36px,5.4vw,62px)/1.06 var(--font-display); letter-spacing:-.028em; color:var(--color-ink); text-wrap:balance; }
+  h3 { font-weight: 700; line-height: 1.3; }
+  .display  { font: 800 clamp(38px,5.6vw,66px)/1.02 var(--font-display); letter-spacing:-.034em; color:var(--color-ink); text-wrap:balance; }
   .title-lg { font: 700 clamp(25px,3.1vw,38px)/1.14 var(--font-display); letter-spacing:-.024em; color:var(--color-ink); text-wrap:balance; }
+  .title-md { font: 700 clamp(20px,2.2vw,26px)/1.2 var(--font-display); letter-spacing:-.02em; color:var(--color-ink); text-wrap:balance; }
   .lead     { font-size: clamp(17px,1.45vw,19px); line-height:1.6; color:var(--color-body); max-width:58ch; }
-  /* Sentence case, gentler tracking: the old wide monospace capitals read as a
-     control panel. This still labels a section without barking at anyone. */
-  .kicker   { font: 600 12px/1.3 var(--font-sans); letter-spacing:.04em; color:var(--color-muted); }
+  /* A label, not a shout. Small, semibold, a touch of tracking, in the muted ink. */
+  .kicker   { font: 600 12px/1.3 var(--font-sans); letter-spacing:.05em; text-transform: uppercase; color:var(--color-muted); }
   .mono     { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
   .price    { font: 700 clamp(20px,2vw,25px)/1 var(--font-display); font-variant-numeric: tabular-nums; color:var(--color-ink); letter-spacing:-.02em; }
   :focus-visible { outline: 2px solid var(--color-brand); outline-offset: 3px; border-radius: 6px; }
 }
 
 @layer components {
-  .wrap { max-width: 1280px; margin-inline: auto; padding-inline: 20px; }
+  .wrap { max-width: 1240px; margin-inline: auto; padding-inline: 20px; }
   @media (min-width: 768px) { .wrap { padding-inline: 32px; } }
 
-  /* A card is a soft object resting on the paper, lifting toward the cursor. */
+  /* A card is an object on the bench, lifting toward the cursor. */
   .card {
     background: var(--color-surface);
     border: 1px solid var(--color-line);
@@ -169,33 +176,69 @@ body {
   .card-hover:hover, .card-hover:focus-visible {
     transform: translateY(-3px);
     box-shadow: var(--shadow-lift);
-    border-color: color-mix(in srgb, var(--accent, var(--color-brand)) 34%, var(--color-line));
+    border-color: color-mix(in srgb, var(--accent, var(--color-brand)) 40%, var(--color-line));
   }
 
-  /* the house seal behind the hero */
-  .hero-seal {
-    position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 0;
-    display: grid; place-items: center;
+  /* ---- the blueprint ----
+     Graph paper behind the hero: the thing a workshop draws on before it builds.
+     Pure CSS, fades out toward the edges so the text sits on clean ground. */
+  .blueprint {
+    position: absolute; inset: 0; pointer-events: none; z-index: 0;
+    background-image:
+      linear-gradient(var(--grid-line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+    background-size: 36px 36px;
+    -webkit-mask-image: radial-gradient(ellipse 70% 80% at 50% 30%, #000 30%, transparent 100%);
+            mask-image: radial-gradient(ellipse 70% 80% at 50% 30%, #000 30%, transparent 100%);
   }
-  .hero-seal svg {
-    width: min(126vw, 1180px); height: auto; opacity: .34;
-    transform: translateY(-4%);
+  .blueprint::before, .blueprint::after {
+    content: ""; position: absolute; border-radius: 999px; filter: blur(60px);
   }
-  :root[data-theme="dark"] .hero-seal svg { opacity: .3; }
-  @keyframes seal-turn { to { transform: rotate(360deg); } }
-  .hero-seal-spin { transform-origin: 300px 300px; animation: seal-turn 240s linear infinite; }
+  .blueprint::before { width: 46vw; height: 46vw; max-width: 620px; max-height: 620px; left: -10vw; top: -18vw; background: var(--hero-glow-1); }
+  .blueprint::after  { width: 40vw; height: 40vw; max-width: 560px; max-height: 560px; right: -8vw; bottom: -20vw; background: var(--hero-glow-2); }
+
+  /* ---- a door ----
+     The two big choices on the front page. A card that is unmistakably clickable,
+     keyed to one of the two audiences by its accent. */
+  .door {
+    position: relative; display: flex; flex-direction: column; gap: 14px;
+    padding: 24px; border-radius: var(--r-card);
+    background: var(--color-surface); border: 1px solid var(--color-line);
+    box-shadow: var(--shadow-card);
+    transition: transform var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out), border-color var(--dur-2) var(--ease-out);
+  }
+  .door::before {
+    content: ""; position: absolute; inset: 0 auto 0 0; width: 4px; border-radius: var(--r-card) 0 0 var(--r-card);
+    background: var(--accent, var(--color-brand));
+  }
+  .door:hover { transform: translateY(-2px); box-shadow: var(--shadow-lift); border-color: color-mix(in srgb, var(--accent, var(--color-brand)) 40%, var(--color-line)); }
+  .door-link {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 10px 12px; border-radius: 10px; font-weight: 600; font-size: 14.5px; color: var(--color-ink);
+    background: var(--color-bg-2); transition: background-color var(--dur-1), color var(--dur-1);
+  }
+  .door-link:hover { background: color-mix(in srgb, var(--accent, var(--color-brand)) 12%, var(--color-bg-2)); color: var(--accent, var(--color-brand)); }
+  .door-link span:last-child { color: var(--color-faint); transition: transform var(--dur-1), color var(--dur-1); }
+  .door-link:hover span:last-child { transform: translateX(3px); color: inherit; }
+
+  /* ---- a fact ----
+     One verifiable claim in a dense strip. Developers read these; buyers are
+     reassured by them. */
+  .fact { display: flex; gap: 12px; align-items: flex-start; padding: 16px 18px; border-radius: 14px; background: var(--color-surface); border: 1px solid var(--color-line); }
+  .fact-icon { flex: none; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; font-size: 16px;
+    background: color-mix(in srgb, var(--tint, var(--color-green)) 14%, var(--color-tint-base)); color: color-mix(in srgb, var(--tint, var(--color-green)) 80%, var(--color-ink)); }
 
   /* rounded pill for categories and status */
   .pill {
     display:inline-flex; align-items:center; gap:6px; border-radius:999px;
     padding: 5px 11px; font-size: 12.5px; font-weight: 600; line-height: 1.25;
-    background: color-mix(in srgb, var(--tint, var(--color-brand)) 11%, var(--color-tint-base));
-    color: color-mix(in srgb, var(--tint, var(--color-brand)) 66%, var(--color-ink));
-    border: 1px solid color-mix(in srgb, var(--tint, var(--color-brand)) 20%, var(--color-tint-base));
+    background: color-mix(in srgb, var(--tint, var(--color-brand)) 12%, var(--color-tint-base));
+    color: color-mix(in srgb, var(--tint, var(--color-brand)) 70%, var(--color-ink));
+    border: 1px solid color-mix(in srgb, var(--tint, var(--color-brand)) 22%, var(--color-tint-base));
   }
   .pill-dot { width:6px; height:6px; border-radius:999px; background: var(--tint, var(--color-brand)); }
 
-  /* buttons — softer corners, a shadow that gathers under rather than behind */
+  /* buttons */
   .btn {
     display:inline-flex; align-items:center; justify-content:center; gap:8px;
     border-radius: var(--r-ctl); padding: 12px 20px; font-weight: 600; font-size: 15px;
@@ -204,9 +247,10 @@ body {
   .btn:active { transform: translateY(1px); }
   .btn-primary {
     background: var(--color-brand); color: #fff;
-    box-shadow: 0 2px 4px color-mix(in srgb, var(--color-brand) 22%, transparent), 0 10px 22px -10px color-mix(in srgb, var(--color-brand) 58%, transparent);
+    box-shadow: 0 1px 2px color-mix(in srgb, var(--color-brand) 30%, transparent), 0 10px 22px -10px color-mix(in srgb, var(--color-brand) 60%, transparent);
   }
-  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 3px 6px color-mix(in srgb, var(--color-brand) 26%, transparent), 0 16px 30px -12px color-mix(in srgb, var(--color-brand) 62%, transparent); }
+  :root[data-theme="dark"] .btn-primary { color: var(--color-on-tint); }
+  .btn-primary:hover { background: var(--color-brand-2); transform: translateY(-1px); box-shadow: 0 3px 6px color-mix(in srgb, var(--color-brand) 30%, transparent), 0 16px 30px -12px color-mix(in srgb, var(--color-brand) 64%, transparent); }
   .btn-secondary { background: var(--color-surface); color: var(--color-ink); border:1px solid var(--color-line-2); box-shadow: var(--shadow-soft); }
   .btn-secondary:hover { border-color: var(--color-brand); color: var(--color-brand); box-shadow: var(--shadow-card); }
   .btn-ghost { background: transparent; color: var(--color-muted); }
@@ -214,7 +258,7 @@ body {
   .btn-danger { background: var(--color-surface); color: var(--color-rose); border:1px solid color-mix(in srgb, var(--color-rose) 32%, var(--color-tint-base)); }
   .btn-danger:hover { background: color-mix(in srgb, var(--color-rose) 8%, var(--color-tint-base)); }
 
-  /* inputs — a gentle well, and a soft halo on focus instead of a hard bar */
+  /* inputs — a gentle well, and a soft halo on focus */
   .input {
     width:100%; border-radius: var(--r-ctl); border:1px solid var(--color-line-2);
     background: var(--color-surface); padding: 12px 14px; font-size: 15px; color: var(--color-ink);
@@ -224,16 +268,22 @@ body {
   .input::placeholder { color: var(--color-faint); }
   .input:focus {
     outline:none; border-color: var(--color-brand);
-    box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-brand) 15%, transparent);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-brand) 16%, transparent);
   }
 
-  /* A quiet panel for asides, welcomes and empty states: warmth without a card's weight. */
+  /* A quiet panel for asides, welcomes and empty states. */
   .note {
     border-radius: var(--r-card);
-    border: 1px solid color-mix(in srgb, var(--tint, var(--color-honey)) 22%, var(--color-line));
+    border: 1px solid color-mix(in srgb, var(--tint, var(--color-honey)) 24%, var(--color-line));
     background: color-mix(in srgb, var(--tint, var(--color-honey)) 8%, var(--color-tint-base));
     padding: 18px 20px;
   }
+
+  /* a segmented control: the filter rows and the how-it-works tabs */
+  .seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 12px; border: 1px solid var(--color-line); background: var(--color-surface); box-shadow: var(--shadow-soft); }
+  .seg > button { border-radius: 9px; padding: 6px 12px; font-size: 13px; font-weight: 600; color: var(--color-muted); transition: background-color var(--dur-1), color var(--dur-1); }
+  .seg > button:hover { color: var(--color-ink); }
+  .seg > button[aria-pressed="true"], .seg > button[data-on="true"] { background: var(--color-ink); color: var(--color-bg); }
 
   /* scroll reveal */
   [data-reveal] > * {
@@ -276,15 +326,15 @@ body {
     transition-duration:1ms !important; scroll-behavior:auto !important;
   }
   [data-reveal] > * { opacity:1 !important; transform:none !important; }
-  .hero-seal-spin { animation:none !important; }
 }
 
 /* wallet adapter */
 .wallet-adapter-button-trigger {
-  background: var(--color-brand) !important; color:#fff !important;
-  border-radius: var(--r-ctl) !important; height: 42px !important; font-size: 14px !important;
+  background: var(--color-ink) !important; color: var(--color-bg) !important;
+  border-radius: var(--r-ctl) !important; height: 40px !important; font-size: 14px !important;
   font-weight: 600 !important; font-family: var(--font-sans) !important;
 }
+.wallet-adapter-button-trigger:hover { background: var(--color-brand) !important; color: #fff !important; }
 .wallet-adapter-modal-wrapper { background: var(--color-surface) !important; border-radius: var(--r-card) !important; }
 .wallet-adapter-modal-title { color: var(--color-ink) !important; }
 /* the adapter hard-codes a light list; give it the themed surface in both directions */

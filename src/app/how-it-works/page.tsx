@@ -5,6 +5,17 @@ import Link from "next/link";
 const FLOWS = [
   {
     n: "01",
+    title: "Commissioned work",
+    tag: "Requests → proposals → escrow",
+    steps: [
+      "Somebody posts what they need built — an app, a site, a bot, a coin — with a budget and a deadline. Posting is free and moves no money.",
+      "Developers send proposals: how they would build it, what they would charge, how long it would take. The poster can read each one's track record before choosing.",
+      "The poster picks one. That developer opens an escrow listing for the agreed price and the poster funds it. From here the flow is the same as buying a project: the SOL sits in an account the program owns.",
+      "The developer delivers; the poster releases. If the deadline passes with nothing delivered, the refund is permissionless. If either side disputes, the funds freeze until an arbitrator picks between the two of them.",
+    ],
+  },
+  {
+    n: "02",
     title: "Token authorities",
     tag: "Fully on chain",
     steps: [
@@ -15,7 +26,7 @@ const FLOWS = [
     ],
   },
   {
-    n: "02",
+    n: "03",
     title: "pump.fun coin ownership",
     tag: "Verified against the curve",
     steps: [
@@ -26,7 +37,7 @@ const FLOWS = [
     ],
   },
   {
-    n: "03",
+    n: "04",
     title: "Projects, sites and communities",
     tag: "Escrowed until delivered",
     steps: [
@@ -46,8 +57,9 @@ export default function HowItWorks() {
           <div className="kicker">How it works</div>
           <h1 className="display mt-4">Nobody has<br />to trust anybody.</h1>
           <p className="lead mt-6">
-            Three kinds of assets, three escrow flows. In every one of them the buyer&apos;s SOL is held by a program
-            on Solana — not a company account — and only moves when the thing being sold has provably changed hands.
+            Whether you are hiring a developer or buying what one already built, the money is held by a program
+            on Solana — not a company account — and only moves when the work has provably changed hands.
+            Four flows, one escrow.
           </p>
         </div>
       </section>
@@ -61,9 +73,7 @@ export default function HowItWorks() {
               </div>
               <div>
                 <h2 className="title-lg">{f.title}</h2>
-                <div className="mt-3 inline-block border border-blue px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-blue">
-                  {f.tag}
-                </div>
+                <div className="pill mt-3" style={{ ["--tint" as string]: "var(--color-blue)" }}>{f.tag}</div>
                 <ol className="mt-5 space-y-3">
                   {f.steps.map((s, i) => (
                     <li key={i} className="grid grid-cols-[2rem_1fr] gap-3 border-t border-line pt-3 text-[15px] leading-relaxed">
@@ -173,11 +183,12 @@ export default function HowItWorks() {
       </section>
 
       <section>
-        <div className="wrap py-10 flex flex-wrap items-center gap-6">
-          <h2 className="title-lg flex-1">Ready to put<br />your work up?</h2>
-          <Link href="/sell" className="btn btn-primary px-7 py-4 font-mono text-[12px] uppercase tracking-[0.16em]">
-            List your work →
-          </Link>
+        <div className="wrap flex flex-wrap items-center gap-6 py-12">
+          <h2 className="title-lg flex-1">Ready?</h2>
+          <div className="flex flex-wrap gap-3">
+            <Link href="/requests#post" className="btn btn-secondary">Post what you need built</Link>
+            <Link href="/sell" className="btn btn-primary">List a project</Link>
+          </div>
         </div>
       </section>
     </>

@@ -8,55 +8,60 @@ import { Logo } from "./Logo";
 
 const WalletMultiButton = dynamic(async () => (await import("@solana/wallet-adapter-react-ui")).WalletMultiButton, { ssr: false });
 
+/**
+ * Five places, not eight. The old row listed every page at the same weight, which
+ * is how a header ends up telling a newcomer nothing. These are the four rooms and
+ * the map; "Sell" became the one button on the right, since it is the thing a
+ * builder came to do, and "Wanted" moved to the footer because it overlaps with
+ * Requests and was confusing people who had not read the difference.
+ */
 const LINKS = [
-  { href: "/", label: "Browse" },
+  { href: "/", label: "Projects" },
   { href: "/requests", label: "Requests" },
-  { href: "/forum", label: "Board" },
   { href: "/builders", label: "Builders" },
-  { href: "/wanted", label: "Wanted" },
-  { href: "/sell", label: "Sell" },
-  { href: "/dashboard", label: "My deals" },
+  { href: "/forum", label: "Board" },
   { href: "/how-it-works", label: "How it works" },
 ];
 
 export function Nav() {
   const cfg = useConfig();
   const path = usePathname();
+  const active = (href: string) => (href === "/" ? path === "/" : path.startsWith(href));
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-bg/85 backdrop-blur-md">
       <div className="wrap flex h-16 items-center gap-4">
         <Link href="/" className="group flex shrink-0 items-center gap-2.5" aria-label="Project: Takeover — home">
-          {/* the husk refills as you point at it: somebody just moved in */}
           <span className="logo-fill"><Logo size={30} /></span>
-          {/* Below sm the wordmark, the theme switch and the wallet button cannot all fit
-              in 390px, and the row was pushing 62px off the side of the screen. The ghost
-              is the distinctive half of the mark, so it carries the brand alone down there. */}
           <span className="hidden text-[17px] font-bold tracking-tight text-ink sm:inline">Project: Takeover</span>
         </Link>
 
-        <nav className="ml-2 hidden items-center gap-1 lg:flex">
+        <nav className="ml-3 hidden items-center gap-0.5 lg:flex">
           {LINKS.map((l) => (
-            <Link key={l.href} href={l.href} aria-current={path === l.href ? "page" : undefined}
-              className={`rounded-lg px-3 py-2 text-[14px] font-semibold transition-colors ${path === l.href ? "bg-bg-2 text-ink" : "text-muted hover:bg-bg-2 hover:text-ink"}`}>
+            <Link key={l.href} href={l.href} aria-current={active(l.href) ? "page" : undefined}
+              className={`whitespace-nowrap rounded-lg px-3 py-2 text-[14px] font-semibold transition-colors ${active(l.href) ? "bg-bg-2 text-ink" : "text-muted hover:bg-bg-2 hover:text-ink"}`}>
               {l.label}
             </Link>
           ))}
         </nav>
 
         <div className="ml-auto flex shrink-0 items-center gap-2">
+          <Link href="/dashboard" className="hidden whitespace-nowrap rounded-lg px-3 py-2 text-[14px] font-semibold text-muted transition-colors hover:bg-bg-2 hover:text-ink md:inline-block">
+            My deals
+          </Link>
           <ThemeToggle />
           {cfg.network !== "mainnet-beta" && (
             <span className="pill hidden sm:inline-flex" style={{ ["--tint" as string]: "var(--color-amber)" }}>{cfg.network}</span>
           )}
+          <Link href="/sell" className="btn btn-primary hidden whitespace-nowrap !px-4 !py-2 text-[14px] md:inline-flex">List a project</Link>
           <WalletMultiButton />
         </div>
       </div>
 
-      {/* mobile nav */}
+      {/* mobile nav: the same rooms, plus the two things the buttons above carry on desktop */}
       <nav className="flex gap-1 overflow-x-auto border-t border-line px-4 py-2 lg:hidden">
-        {LINKS.map((l) => (
-          <Link key={l.href} href={l.href} aria-current={path === l.href ? "page" : undefined}
-            className={`shrink-0 rounded-lg px-3 py-1.5 text-[13px] font-semibold ${path === l.href ? "bg-bg-2 text-ink" : "text-muted"}`}>
+        {[...LINKS, { href: "/sell", label: "Sell" }, { href: "/dashboard", label: "My deals" }].map((l) => (
+          <Link key={l.href} href={l.href} aria-current={active(l.href) ? "page" : undefined}
+            className={`shrink-0 rounded-lg px-3 py-1.5 text-[13px] font-semibold ${active(l.href) ? "bg-bg-2 text-ink" : "text-muted"}`}>
             {l.label}
           </Link>
         ))}
